@@ -17,6 +17,10 @@ def create_app():
 
     app.register_blueprint(health_bp, url_prefix="/api")
 
+    from app.routes.upload import upload_bp
+
+    app.register_blueprint(upload_bp, url_prefix="/api")
+
     # Global error handlers
     @app.errorhandler(404)
     def not_found(e):
