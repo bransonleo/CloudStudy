@@ -142,3 +142,43 @@ def save_result(material_id, result_type, status, content=None,
                 return result_id
     finally:
         conn.close()
+
+
+def get_material_with_results(material_id):
+    """Fetch a material and all its results. Always returns all three result type keys."""
+    material = get_material(material_id)
+    if not material:
+        return None
+
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM results WHERE material_id=%s", (material_id,))
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    results = {
+        "summary": {"status": "not_requested"},
+        "quiz": {"status": "not_requested"},
+        "flashcards": {"status": "not_requested"},
+    }
+    for row in rows:
+        entry = {"status": row["status"]}
+        if row["content"]:
+            entry["content"] = (
+                json.loads(row["content"])
+                if isinstance(row["content"], str)
+                else row["content"]
+            )
+        if row.get("format_hint"):
+            entry["format_hint"] = row["format_hint"]
+        results[row["result_type"]] = entry
+
+    return {
+        "material_id": material["id"],
+        "filename": material["filename"],
+        "status": material["status"],
+        "error_message": material.get("error_message"),
+        "results": results,
+    }

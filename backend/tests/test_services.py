@@ -131,3 +131,40 @@ def test_save_result_updates_existing_row(mock_get_conn, app):
     assert result_id == "existing-result-id"
     calls = [c[0][0] for c in mock_cursor.execute.call_args_list]
     assert any("UPDATE results" in sql for sql in calls)
+
+
+# Decorator order note: bottom @patch → first mock arg, top @patch → second mock arg.
+# So mock_get_conn = _get_connection, mock_get_mat = get_material.
+@patch("app.services.db_service.get_material")     # top → mock_get_mat (2nd arg)
+@patch("app.services.db_service._get_connection")  # bottom → mock_get_conn (1st arg)
+def test_get_material_with_results_synthesises_not_requested(mock_get_conn, mock_get_mat, app):
+    mock_get_mat.return_value = {
+        "id": "mat-1", "filename": "notes.txt", "status": "ready", "error_message": None
+    }
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_cursor.fetchall.return_value = [
+        {"result_type": "summary", "status": "done",
+         "content": '{"title":"t"}', "format_hint": None}
+    ]
+    mock_get_conn.return_value = mock_conn
+    mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+    mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+    with app.app_context():
+        result = db_service.get_material_with_results("mat-1")
+
+    assert result["material_id"] == "mat-1"
+    assert result["results"]["summary"]["status"] == "done"
+    assert result["results"]["quiz"]["status"] == "not_requested"
+    assert result["results"]["flashcards"]["status"] == "not_requested"
+
+
+@patch("app.services.db_service.get_material")
+def test_get_material_with_results_returns_none_when_missing(mock_get_mat, app):
+    mock_get_mat.return_value = None
+
+    with app.app_context():
+        result = db_service.get_material_with_results("nonexistent")
+
+    assert result is None

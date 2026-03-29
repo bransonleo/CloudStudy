@@ -24,6 +24,11 @@ def create_app(test_config=None):
 
     app.register_blueprint(upload_bp, url_prefix="/api")
 
+    # Create database tables on startup (unless testing)
+    if not app.config.get("TESTING"):
+        from app.services import db_service
+        db_service.create_tables()
+
     # Global error handlers
     @app.errorhandler(404)
     def not_found(e):

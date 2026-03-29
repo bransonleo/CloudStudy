@@ -5,8 +5,7 @@ from app import create_app
 @pytest.fixture
 def app():
     """Create a test Flask application."""
-    app = create_app()
-    app.config["TESTING"] = True
+    app = create_app({"TESTING": True})
     yield app
 
 
