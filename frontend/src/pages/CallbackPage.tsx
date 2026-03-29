@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { exchangeCodeForTokens } from '../api/cognito';
@@ -9,8 +9,12 @@ export default function CallbackPage() {
   const navigate = useNavigate();
   const { setTokens } = useAuth();
   const [error, setError] = useState('');
+  const attempted = useRef(false); // prevents React StrictMode double-invocation
 
   useEffect(() => {
+    if (attempted.current) return;
+    attempted.current = true;
+
     const code = searchParams.get('code');
     const errorParam = searchParams.get('error');
 

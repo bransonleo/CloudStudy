@@ -60,12 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('id_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('userEmail');
+    sessionStorage.removeItem('pkce_verifier');
     setToken(null);
     setUserEmail(null);
-
-    // If Cognito is configured, redirect to Cognito logout to clear their session too
     if (isCognitoConfigured()) {
       window.location.href = getCognitoLogoutUrl();
+    } else {
+      window.location.href = '/login';
     }
   };
 
