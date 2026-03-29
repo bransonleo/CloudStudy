@@ -1,0 +1,39 @@
+.wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 56px - 3rem);
+}
+
+.card {
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 2rem;
+  max-width: 400px;
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+}
+
+.card p {
+  color: #64748b;
+  margin: 0;
+}
+
+.error {
+  color: #dc2626;
+}
+
+.link {
+  display: inline-block;
+  margin-top: 1rem;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

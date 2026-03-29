@@ -1,0 +1,100 @@
+.modeTabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  padding: 0.5rem 1.25rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.tab:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.tab:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: none;
+}
+
+.activeTab {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.options {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.options h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.checks {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.error {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.generateBtn {
+  padding: 0.6rem 1.5rem;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.generateBtn:hover {
+  background: #1d4ed8;
+}
+
+.generateBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
