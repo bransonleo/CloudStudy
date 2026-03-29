@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FileDropZone from '../components/FileDropZone';
-import { uploadFile, generateContent } from '../api/client';
-import { mockResult } from '../api/mockData';
+import { uploadFile, generateContent, getResults } from '../api/client';
 import type { GenerationType, HistoryEntry } from '../types';
 import styles from './UploadPage.module.css';
 
@@ -10,8 +9,9 @@ const GENERATION_OPTIONS: { value: GenerationType; label: string }[] = [
   { value: 'summary', label: 'Summary' },
   { value: 'quiz', label: 'Quiz' },
   { value: 'flashcards', label: 'Flashcards' },
-  { value: 'translation', label: 'Translation' },
 ];
+
+type Status = 'idle' | 'uploading' | 'extracting' | 'generating' | 'error';
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -19,8 +19,16 @@ export default function UploadPage() {
   const [pastedText, setPastedText] = useState('');
   const [mode, setMode] = useState<'file' | 'text'>('file');
   const [selectedTypes, setSelectedTypes] = useState<Set<GenerationType>>(new Set(['summary']));
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'generating' | 'error'>('idle');
+  const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const hasInput = mode === 'file' ? !!file : pastedText.trim().length > 0;
 
@@ -33,6 +41,33 @@ export default function UploadPage() {
     });
   }
 
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  async function runGenerate(materialId: string, filename: string) {
+    setStatus('generating');
+    for (const type of selectedTypes) {
+      await generateContent(materialId, type);
+    }
+
+    // Save to history
+    const entry: HistoryEntry = {
+      material_id: materialId,
+      filename,
+      timestamp: new Date().toISOString(),
+      types: [...selectedTypes],
+    };
+    const history: HistoryEntry[] = JSON.parse(localStorage.getItem('uploadHistory') ?? '[]');
+    history.push(entry);
+    localStorage.setItem('uploadHistory', JSON.stringify(history));
+
+    navigate(`/result/${materialId}`);
+  }
+
   async function handleGenerate() {
     if (!hasInput || selectedTypes.size === 0) return;
 
@@ -41,48 +76,64 @@ export default function UploadPage() {
 
     try {
       let materialId: string;
+      let filename: string;
 
       if (mode === 'file' && file) {
         const res = await uploadFile(file);
         materialId = res.material_id;
+        filename = file.name;
       } else {
-        // For pasted text, create a Blob as a .txt file
         const blob = new Blob([pastedText], { type: 'text/plain' });
         const txtFile = new File([blob], 'pasted-notes.txt', { type: 'text/plain' });
         const res = await uploadFile(txtFile);
         materialId = res.material_id;
+        filename = 'pasted-notes.txt';
       }
 
-      setStatus('generating');
+      // Backend returns 202 — OCR is running in background, poll until ready
+      setStatus('extracting');
 
-      try {
-        const result = await generateContent(materialId, [...selectedTypes]);
-        // Store result for the result page
-        localStorage.setItem(`result-${materialId}`, JSON.stringify(result));
-      } catch {
-        // /api/generate not implemented yet — store mock data
-        const mock = { ...mockResult, material_id: materialId, filename: file?.name ?? 'pasted-notes.txt' };
-        localStorage.setItem(`result-${materialId}`, JSON.stringify(mock));
-      }
+      await new Promise<void>((resolve, reject) => {
+        pollRef.current = setInterval(async () => {
+          try {
+            const data = await getResults(materialId);
+            if (data.status === 'ready') {
+              stopPolling();
+              resolve();
+            } else if (data.status === 'error') {
+              stopPolling();
+              reject(new Error(data.error_message ?? 'Text extraction failed'));
+            }
+            // status === 'extracting' → keep polling
+          } catch {
+            stopPolling();
+            reject(new Error('Failed to check processing status'));
+          }
+        }, 2000);
+      });
 
-      // Save to history
-      const entry: HistoryEntry = {
-        material_id: materialId,
-        filename: file?.name ?? 'pasted-notes.txt',
-        timestamp: new Date().toISOString(),
-        types: [...selectedTypes],
-      };
-      const history: HistoryEntry[] = JSON.parse(localStorage.getItem('uploadHistory') ?? '[]');
-      history.push(entry);
-      localStorage.setItem('uploadHistory', JSON.stringify(history));
-
-      navigate(`/result/${materialId}`);
+      await runGenerate(materialId, filename);
     } catch (err: unknown) {
+      stopPolling();
       setStatus('error');
-      const msg = (err && typeof err === 'object' && 'error' in err) ? (err as { error: string }).error : 'Upload failed';
+      const msg = (err instanceof Error)
+        ? err.message
+        : (err && typeof err === 'object' && 'error' in err)
+          ? (err as { error: string }).error
+          : 'Something went wrong';
       setError(msg);
     }
   }
+
+  const buttonLabel = {
+    idle: 'Generate',
+    uploading: 'Uploading...',
+    extracting: 'Extracting text...',
+    generating: 'Generating...',
+    error: 'Generate',
+  }[status];
+
+  const isBusy = status === 'uploading' || status === 'extracting' || status === 'generating';
 
   return (
     <div>
@@ -125,24 +176,25 @@ export default function UploadPage() {
                   type="checkbox"
                   checked={selectedTypes.has(value)}
                   onChange={() => toggleType(value)}
+                  disabled={isBusy}
                 />
                 {label}
               </label>
             ))}
           </div>
 
+          {status === 'extracting' && (
+            <p className={styles.info}>Extracting text from your file, this may take a moment...</p>
+          )}
+
           {error && <p className={styles.error}>{error}</p>}
 
           <button
             className={styles.generateBtn}
             onClick={handleGenerate}
-            disabled={selectedTypes.size === 0 || status === 'uploading' || status === 'generating'}
+            disabled={selectedTypes.size === 0 || isBusy}
           >
-            {status === 'uploading'
-              ? 'Uploading...'
-              : status === 'generating'
-                ? 'Generating...'
-                : 'Generate'}
+            {buttonLabel}
           </button>
         </section>
       )}

@@ -78,3 +78,10 @@
   font-weight: 500;
   margin: 0;
 }
+
+.explanation {
+  color: #64748b;
+  font-size: 0.82rem;
+  margin: 0.4rem 0 0;
+  font-style: italic;
+}

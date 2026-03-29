@@ -73,6 +73,12 @@
   cursor: pointer;
 }
 
+.info {
+  color: #2563eb;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
 .error {
   color: #dc2626;
   font-size: 0.85rem;
