@@ -2,7 +2,7 @@ import io
 import pytest
 from unittest.mock import patch, MagicMock
 from app import create_app
-from app.services import db_service, s3_service
+from app.services import db_service, s3_service, ocr_service
 
 
 @pytest.fixture
@@ -199,3 +199,51 @@ def test_get_file_bytes_returns_rewound_bytesio(mock_get_client, app):
         buf = s3_service.get_file_bytes("uploads/mat-1/notes.txt")
 
     assert buf.read() == b"file content"
+
+
+def test_extract_text_txt_decodes_utf8(app):
+    buf = io.BytesIO("Hello, notes!".encode("utf-8"))
+    with app.app_context():
+        text = ocr_service.extract_text(buf, "text/plain")
+    assert text == "Hello, notes!"
+
+
+@patch("app.services.ocr_service.pdfplumber")
+def test_extract_text_pdf_joins_pages(mock_pdfplumber, app):
+    mock_page1 = MagicMock()
+    mock_page1.extract_text.return_value = "Page one text"
+    mock_page2 = MagicMock()
+    mock_page2.extract_text.return_value = "Page two text"
+    mock_pdf = MagicMock()
+    mock_pdf.pages = [mock_page1, mock_page2]
+    mock_pdfplumber.open.return_value.__enter__ = MagicMock(return_value=mock_pdf)
+    mock_pdfplumber.open.return_value.__exit__ = MagicMock(return_value=False)
+
+    buf = io.BytesIO(b"%PDF-fake")
+    with app.app_context():
+        text = ocr_service.extract_text(buf, "application/pdf")
+
+    assert "Page one text" in text
+    assert "Page two text" in text
+
+
+@patch("app.services.ocr_service.boto3")
+def test_extract_text_image_calls_textract(mock_boto3, app):
+    mock_client = MagicMock()
+    mock_boto3.client.return_value = mock_client
+    mock_client.detect_document_text.return_value = {
+        "Blocks": [
+            {"BlockType": "LINE", "Text": "Line one"},
+            {"BlockType": "WORD", "Text": "ignored"},
+            {"BlockType": "LINE", "Text": "Line two"},
+        ]
+    }
+
+    buf = io.BytesIO(b"\x89PNG\r\n")
+    with app.app_context():
+        text = ocr_service.extract_text(buf, "image/png")
+
+    assert text == "Line one\nLine two"
+    mock_client.detect_document_text.assert_called_once()
+    call_kwargs = mock_client.detect_document_text.call_args[1]
+    assert call_kwargs["Document"]["Bytes"] == b"\x89PNG\r\n"
