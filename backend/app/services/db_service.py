@@ -53,3 +53,35 @@ def create_tables():
             """)
     finally:
         conn.close()
+
+
+def create_material(material_id, filename, s3_key, file_type):
+    """Insert a new material row with status='extracting'."""
+    now = datetime.utcnow()
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO materials
+                   (id, filename, s3_key, file_type, status, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, 'extracting', %s, %s)""",
+                (material_id, filename, s3_key, file_type, now, now),
+            )
+    finally:
+        conn.close()
+
+
+def update_material(material_id, status, extracted_text=None, error_message=None):
+    """Update material status, extracted_text, and error_message."""
+    now = datetime.utcnow()
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE materials
+                   SET status=%s, extracted_text=%s, error_message=%s, updated_at=%s
+                   WHERE id=%s""",
+                (status, extracted_text, error_message, now, material_id),
+            )
+    finally:
+        conn.close()
