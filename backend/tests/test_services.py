@@ -39,14 +39,16 @@ def test_create_material_inserts_row(mock_get_conn, app):
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
     with app.app_context():
-        db_service.create_material("mat-1", "notes.txt", "uploads/mat-1/notes.txt", "txt")
+        db_service.create_material("mat-1", "notes.txt", "uploads/mat-1/notes.txt", "txt", "user-123")
 
     sql, params = mock_cursor.execute.call_args[0]
     assert "INSERT INTO materials" in sql
+    assert "user_id" in sql
     assert params[0] == "mat-1"
     assert params[1] == "notes.txt"
     assert params[2] == "uploads/mat-1/notes.txt"
     assert params[3] == "txt"
+    assert params[4] == "user-123"
 
 
 @patch("app.services.db_service._get_connection")
@@ -77,10 +79,13 @@ def test_get_material_returns_row(mock_get_conn, app):
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
     with app.app_context():
-        row = db_service.get_material("mat-1")
+        row = db_service.get_material("mat-1", "user-123")
 
     assert row["id"] == "mat-1"
     assert row["status"] == "ready"
+    sql, params = mock_cursor.execute.call_args[0]
+    assert "user_id" in sql
+    assert "user-123" in params
 
 
 @patch("app.services.db_service._get_connection")
@@ -93,7 +98,7 @@ def test_get_material_returns_none_when_missing(mock_get_conn, app):
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
     with app.app_context():
-        row = db_service.get_material("nonexistent")
+        row = db_service.get_material("nonexistent", "user-123")
 
     assert row is None
 
@@ -153,7 +158,7 @@ def test_get_material_with_results_synthesises_not_requested(mock_get_conn, mock
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
     with app.app_context():
-        result = db_service.get_material_with_results("mat-1")
+        result = db_service.get_material_with_results("mat-1", "user-123")
 
     assert result["material_id"] == "mat-1"
     assert result["results"]["summary"]["status"] == "done"
@@ -166,7 +171,7 @@ def test_get_material_with_results_returns_none_when_missing(mock_get_mat, app):
     mock_get_mat.return_value = None
 
     with app.app_context():
-        result = db_service.get_material_with_results("nonexistent")
+        result = db_service.get_material_with_results("nonexistent", "user-123")
 
     assert result is None
 
