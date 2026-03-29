@@ -85,3 +85,60 @@ def update_material(material_id, status, extracted_text=None, error_message=None
             )
     finally:
         conn.close()
+
+
+def get_material(material_id):
+    """Fetch a material row by ID. Returns dict or None."""
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM materials WHERE id=%s", (material_id,))
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def save_result(material_id, result_type, status, content=None,
+                format_hint=None, error_message=None):
+    """Upsert a results row. Returns the result_id."""
+    now = datetime.utcnow()
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM results WHERE material_id=%s AND result_type=%s",
+                (material_id, result_type),
+            )
+            existing = cur.fetchone()
+            if existing:
+                cur.execute(
+                    """UPDATE results
+                       SET status=%s, content=%s, format_hint=%s,
+                           error_message=%s, updated_at=%s
+                       WHERE id=%s""",
+                    (
+                        status,
+                        json.dumps(content) if content else None,
+                        format_hint,
+                        error_message,
+                        now,
+                        existing["id"],
+                    ),
+                )
+                return existing["id"]
+            else:
+                result_id = str(uuid.uuid4())
+                cur.execute(
+                    """INSERT INTO results
+                       (id, material_id, result_type, status, content,
+                        format_hint, error_message, created_at, updated_at)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (
+                        result_id, material_id, result_type, status,
+                        json.dumps(content) if content else None,
+                        format_hint, error_message, now, now,
+                    ),
+                )
+                return result_id
+    finally:
+        conn.close()
