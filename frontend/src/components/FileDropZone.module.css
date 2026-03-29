@@ -1,0 +1,32 @@
+.zone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.zone:hover,
+.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.label {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.error {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: #dc2626;
+}

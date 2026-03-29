@@ -1,0 +1,50 @@
+.empty {
+  text-align: center;
+  padding: 3rem 0;
+  color: #64748b;
+}
+
+.empty a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.empty a:hover {
+  text-decoration: underline;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9rem;
+}
+
+.table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.viewLink {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.viewLink:hover {
+  text-decoration: underline;
+}
