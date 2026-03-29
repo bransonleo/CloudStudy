@@ -270,3 +270,100 @@ def test_verify_unknown_kid_after_refetch_raises(mock_get, rsa_keys, app):
     with app.app_context():
         with pytest.raises(auth_service.InvalidTokenError, match="kid"):
             auth_service.verify_token(token)
+
+
+# ── Middleware: before_request hook ───────────────────────────────
+
+class TestBeforeRequestHook:
+    """Tests for the global before_request auth gate."""
+
+    def test_health_endpoint_needs_no_token(self, app):
+        """GET /api/health should work without any auth."""
+        client = app.test_client()
+        # Disable TESTING to exercise real before_request behavior
+        app.config["TESTING"] = False
+        response = client.get("/api/health")
+        assert response.status_code == 200
+
+    @patch("app.services.auth_service.verify_token")
+    def test_protected_endpoint_without_token_returns_401(self, mock_verify, app):
+        app.config["TESTING"] = False
+        client = app.test_client()
+        response = client.post("/api/upload")
+        assert response.status_code == 401
+        assert "Authorization" in response.get_json()["error"]
+
+    @patch("app.services.auth_service.verify_token")
+    def test_protected_endpoint_with_bad_scheme_returns_401(self, mock_verify, app):
+        app.config["TESTING"] = False
+        client = app.test_client()
+        response = client.post(
+            "/api/upload",
+            headers={"Authorization": "Basic dXNlcjpwYXNz"},
+        )
+        assert response.status_code == 401
+
+    @patch("app.services.auth_service.verify_token")
+    def test_valid_token_sets_g_user_id(self, mock_verify, app):
+        app.config["TESTING"] = False
+        mock_verify.return_value = {
+            "sub": "user-uuid-456",
+            "username": "jane@example.com",
+            "token_use": "access",
+        }
+        client = app.test_client()
+        # Hit health to prime, then upload (which will fail on validation,
+        # but auth should pass, giving us a 400 not a 401)
+        response = client.post(
+            "/api/upload",
+            headers={"Authorization": "Bearer valid-test-token"},
+        )
+        # 400 = auth passed, route validation caught missing file
+        assert response.status_code == 400
+        mock_verify.assert_called_once_with("valid-test-token")
+
+    @patch("app.services.auth_service.verify_token")
+    def test_expired_token_returns_401(self, mock_verify, app):
+        from app.services.auth_service import InvalidTokenError
+        app.config["TESTING"] = False
+        mock_verify.side_effect = InvalidTokenError("Token has expired")
+        client = app.test_client()
+        response = client.post(
+            "/api/upload",
+            headers={"Authorization": "Bearer expired-token"},
+        )
+        assert response.status_code == 401
+        assert "expired" in response.get_json()["error"].lower()
+
+    def test_testing_mode_sets_default_user(self, app):
+        """In TESTING mode, before_request sets a default test user."""
+        client = app.test_client()
+        # TESTING is already True from the fixture
+        # Upload will fail on validation but auth should be bypassed
+        response = client.post("/api/upload")
+        assert response.status_code == 400  # not 401
+
+
+# ── Middleware: @require_auth decorator ───────────────────────────
+
+class TestRequireAuthDecorator:
+    """Tests for the @require_auth decorator."""
+
+    @patch("app.services.auth_service.verify_token")
+    def test_decorator_passes_when_g_user_id_set(self, mock_verify, app):
+        """When before_request already set g.user_id, decorator passes through."""
+        app.config["TESTING"] = False
+        mock_verify.return_value = {
+            "sub": "user-uuid-789",
+            "username": "bob@example.com",
+            "token_use": "access",
+        }
+        client = app.test_client()
+        response = client.post(
+            "/api/upload",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        # Auth passed (400 = file validation, not 401)
+        assert response.status_code == 400
+        # verify_token called once by before_request, not again by decorator
+        mock_verify.assert_called_once()
