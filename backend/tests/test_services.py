@@ -1,7 +1,8 @@
+import io
 import pytest
 from unittest.mock import patch, MagicMock
 from app import create_app
-from app.services import db_service
+from app.services import db_service, s3_service
 
 
 @pytest.fixture
@@ -168,3 +169,33 @@ def test_get_material_with_results_returns_none_when_missing(mock_get_mat, app):
         result = db_service.get_material_with_results("nonexistent")
 
     assert result is None
+
+
+@patch("app.services.s3_service._get_client")
+def test_upload_file_calls_upload_fileobj(mock_get_client, app):
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+
+    with app.app_context():
+        app.config["S3_BUCKET_NAME"] = "test-bucket"
+        s3_service.upload_file(io.BytesIO(b"content"), "uploads/mat-1/notes.txt")
+
+    mock_client.upload_fileobj.assert_called_once()
+    call_args = mock_client.upload_fileobj.call_args[0]
+    assert call_args[1] == "test-bucket"
+    assert call_args[2] == "uploads/mat-1/notes.txt"
+
+
+@patch("app.services.s3_service._get_client")
+def test_get_file_bytes_returns_rewound_bytesio(mock_get_client, app):
+    mock_client = MagicMock()
+    mock_client.get_object.return_value = {
+        "Body": MagicMock(read=MagicMock(return_value=b"file content"))
+    }
+    mock_get_client.return_value = mock_client
+
+    with app.app_context():
+        app.config["S3_BUCKET_NAME"] = "test-bucket"
+        buf = s3_service.get_file_bytes("uploads/mat-1/notes.txt")
+
+    assert buf.read() == b"file content"
