@@ -48,3 +48,37 @@ def _run_ocr(app, material_id, s3_key, content_type):
             db_service.update_material(
                 material_id, status="error", error_message=str(e)
             )
+
+
+def run_generation(material_id, result_type, format_hint=None):
+    """Run Gemini generation synchronously. Returns result dict.
+    Raises MaterialNotFound, MaterialNotReady, or MaterialFailed on pipeline errors."""
+    material = db_service.get_material(material_id)
+    if not material:
+        raise MaterialNotFound(material_id)
+    if material["status"] == "extracting":
+        raise MaterialNotReady()
+    if material["status"] == "error":
+        raise MaterialFailed(material.get("error_message", "OCR failed"))
+
+    try:
+        content = ai_service.generate(
+            material["extracted_text"], result_type, format_hint
+        )
+    except Exception as e:
+        db_service.save_result(
+            material_id, result_type, status="error", error_message=str(e)
+        )
+        raise
+
+    result_id = db_service.save_result(
+        material_id, result_type, status="done",
+        content=content, format_hint=format_hint,
+    )
+    return {
+        "result_id": result_id,
+        "material_id": material_id,
+        "type": result_type,
+        "content": content,
+        "format_hint": format_hint,
+    }
