@@ -24,6 +24,10 @@ def create_app(test_config=None):
 
     app.register_blueprint(upload_bp, url_prefix="/api")
 
+    from app.routes.generate import generate_bp
+
+    app.register_blueprint(generate_bp, url_prefix="/api")
+
     # Create database tables on startup (unless testing)
     if not app.config.get("TESTING"):
         from app.services import db_service
