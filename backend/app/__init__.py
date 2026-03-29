@@ -35,7 +35,8 @@ def create_app(test_config=None):
     # Create database tables on startup (unless testing)
     if not app.config.get("TESTING"):
         from app.services import db_service
-        db_service.create_tables()
+        with app.app_context():
+            db_service.create_tables()
 
     # Global error handlers
     @app.errorhandler(404)
