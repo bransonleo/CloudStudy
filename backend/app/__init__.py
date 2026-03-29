@@ -4,10 +4,13 @@ from flask_cors import CORS
 from app.config import Config
 
 
-def create_app():
+def create_app(test_config=None):
     """Application factory — creates and configures the Flask app."""
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    if test_config:
+        app.config.update(test_config)
 
     # CORS: allow frontend dev server
     CORS(app)
