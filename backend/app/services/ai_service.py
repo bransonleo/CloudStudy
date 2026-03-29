@@ -1,7 +1,7 @@
 import json
 import logging
 
-import google.generativeai as genai
+from google import genai
 from flask import current_app
 
 logger = logging.getLogger(__name__)
@@ -10,10 +10,9 @@ logger = logging.getLogger(__name__)
 def generate(extracted_text, result_type, format_hint=None):
     """Call Gemini to generate content. Returns parsed dict.
     Raises ValueError if response cannot be parsed as JSON."""
-    genai.configure(api_key=current_app.config["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    client = genai.Client(api_key=current_app.config["GEMINI_API_KEY"])
     prompt = _build_prompt(extracted_text, result_type, format_hint)
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     raw = response.text
     try:
         return json.loads(raw)
