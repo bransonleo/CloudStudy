@@ -2,7 +2,7 @@ import io
 import pytest
 from unittest.mock import patch, MagicMock
 from app import create_app
-from app.services import db_service, s3_service, ocr_service
+from app.services import db_service, s3_service, ocr_service, ai_service
 
 
 @pytest.fixture
@@ -247,3 +247,86 @@ def test_extract_text_image_calls_textract(mock_boto3, app):
     mock_client.detect_document_text.assert_called_once()
     call_kwargs = mock_client.detect_document_text.call_args[1]
     assert call_kwargs["Document"]["Bytes"] == b"\x89PNG\r\n"
+
+
+@patch("app.services.ai_service.genai")
+def test_generate_summary_returns_parsed_dict(mock_genai, app):
+    mock_model = MagicMock()
+    mock_genai.GenerativeModel.return_value = mock_model
+    mock_model.generate_content.return_value = MagicMock(
+        text='{"title": "Notes", "key_points": ["a", "b"], "summary": "Short summary"}'
+    )
+
+    with app.app_context():
+        app.config["GEMINI_API_KEY"] = "test-key"
+        result = ai_service.generate("Study text here", "summary")
+
+    assert result["title"] == "Notes"
+    mock_genai.configure.assert_called_once_with(api_key="test-key")
+
+
+@patch("app.services.ai_service.genai")
+def test_generate_quiz_default_uses_mcq_prompt(mock_genai, app):
+    mock_model = MagicMock()
+    mock_genai.GenerativeModel.return_value = mock_model
+    mock_model.generate_content.return_value = MagicMock(
+        text='{"questions": [{"question": "Q?", "options": ["A","B","C","D"], "correct_index": 0, "explanation": "Because A"}]}'
+    )
+
+    with app.app_context():
+        app.config["GEMINI_API_KEY"] = "test-key"
+        result = ai_service.generate("Text", "quiz")
+
+    prompt = mock_model.generate_content.call_args[0][0]
+    assert "5 multiple-choice questions" in prompt
+    assert result["questions"][0]["question"] == "Q?"
+
+
+@patch("app.services.ai_service.genai")
+def test_generate_quiz_uses_format_hint(mock_genai, app):
+    mock_model = MagicMock()
+    mock_genai.GenerativeModel.return_value = mock_model
+    mock_model.generate_content.return_value = MagicMock(text='{"questions": []}')
+
+    with app.app_context():
+        app.config["GEMINI_API_KEY"] = "test-key"
+        ai_service.generate("Text", "quiz", format_hint="3 true/false questions")
+
+    prompt = mock_model.generate_content.call_args[0][0]
+    assert "3 true/false questions" in prompt
+
+
+@patch("app.services.ai_service.genai")
+def test_generate_flashcards_returns_parsed_dict(mock_genai, app):
+    mock_model = MagicMock()
+    mock_genai.GenerativeModel.return_value = mock_model
+    mock_model.generate_content.return_value = MagicMock(
+        text='{"flashcards": [{"front": "Q", "back": "A"}]}'
+    )
+
+    with app.app_context():
+        app.config["GEMINI_API_KEY"] = "test-key"
+        result = ai_service.generate("Text", "flashcards")
+
+    assert result["flashcards"][0]["front"] == "Q"
+
+
+def test_generate_raises_on_unknown_type(app):
+    with app.app_context():
+        app.config["GEMINI_API_KEY"] = "test-key"
+        with pytest.raises(ValueError, match="Unknown result_type"):
+            ai_service.generate("Text", "essay")
+
+
+@patch("app.services.ai_service.genai")
+def test_generate_raises_on_unparseable_json(mock_genai, app):
+    mock_model = MagicMock()
+    mock_genai.GenerativeModel.return_value = mock_model
+    mock_model.generate_content.return_value = MagicMock(
+        text="```json\n{not valid json}\n```"
+    )
+
+    with app.app_context():
+        app.config["GEMINI_API_KEY"] = "test-key"
+        with pytest.raises(ValueError, match="AI response could not be parsed"):
+            ai_service.generate("Study text", "summary")
