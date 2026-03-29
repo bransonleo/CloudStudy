@@ -103,23 +103,33 @@ The frontend runs at `http://localhost:5173`.
 
 ```
 CloudStudy/
-├── backend/              # Flask API server
+├── backend/                  # Flask API server
 │   ├── app/
-│   │   ├── routes/       # API endpoint blueprints
-│   │   ├── services/     # Business logic (S3, AI, OCR, DB)
-│   │   └── models/       # Data schemas
-│   ├── requirements.txt  # Python dependencies
-│   ├── .env.example      # Environment variable template
-│   └── run.py            # Entry point
-├── frontend/             # React app (Vite)
-├── docs/                 # API contract, architecture notes
-├── scripts/              # Deployment and setup scripts
-└── infrastructure/       # AWS setup notes
+│   │   ├── __init__.py       # App factory, CORS, blueprints, error handlers
+│   │   ├── config.py         # Configuration (reads from .env)
+│   │   └── routes/           # API endpoint blueprints
+│   │       ├── health.py     # GET /api/health
+│   │       └── upload.py     # POST /api/upload
+│   ├── tests/                # Pytest test suite
+│   │   ├── conftest.py       # Shared fixtures (Flask test client)
+│   │   ├── test_health.py
+│   │   └── test_upload.py
+│   ├── requirements.txt      # Python runtime dependencies
+│   ├── requirements-dev.txt  # Dev/test dependencies (pytest)
+│   ├── .env.example          # Environment variable template
+│   └── run.py                # Entry point
+├── frontend/                 # React app (Vite)
+└── docs/                     # API contract, architecture notes
 ```
 
 ## API Endpoints
 
-See [docs/API_CONTRACT.md](docs/API_CONTRACT.md) for the full API reference.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check: returns `{"status": "ok"}` |
+| POST | `/api/upload` | Upload a study material (PDF, PNG, JPG, TXT) |
+
+See [docs/api-contract.md](docs/api-contract.md) for request/response details.
 
 ## Environment Variables
 
