@@ -30,6 +30,7 @@ def create_tables():
                     filename VARCHAR(255) NOT NULL,
                     s3_key VARCHAR(512) NOT NULL,
                     file_type VARCHAR(10) NOT NULL,
+                    user_id VARCHAR(255) NOT NULL,
                     status ENUM('extracting','ready','error') NOT NULL DEFAULT 'extracting',
                     extracted_text LONGTEXT,
                     error_message TEXT,
@@ -55,7 +56,7 @@ def create_tables():
         conn.close()
 
 
-def create_material(material_id, filename, s3_key, file_type):
+def create_material(material_id, filename, s3_key, file_type, user_id):
     """Insert a new material row with status='extracting'."""
     now = datetime.utcnow()
     conn = _get_connection()
@@ -63,9 +64,9 @@ def create_material(material_id, filename, s3_key, file_type):
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO materials
-                   (id, filename, s3_key, file_type, status, created_at, updated_at)
-                   VALUES (%s, %s, %s, %s, 'extracting', %s, %s)""",
-                (material_id, filename, s3_key, file_type, now, now),
+                   (id, filename, s3_key, file_type, user_id, status, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, 'extracting', %s, %s)""",
+                (material_id, filename, s3_key, file_type, user_id, now, now),
             )
     finally:
         conn.close()
@@ -87,12 +88,24 @@ def update_material(material_id, status, extracted_text=None, error_message=None
         conn.close()
 
 
-def get_material(material_id):
-    """Fetch a material row by ID. Returns dict or None."""
+def get_material(material_id, user_id=None):
+    """Fetch a material row by ID. If user_id is provided, also filter by owner.
+    Returns dict or None.
+
+    WARNING: Calling without user_id bypasses ownership filtering.
+    Only omit user_id for internal operations (e.g., _run_ocr background thread)
+    that are not triggered by user-facing requests.
+    """
     conn = _get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM materials WHERE id=%s", (material_id,))
+            if user_id:
+                cur.execute(
+                    "SELECT * FROM materials WHERE id=%s AND user_id=%s",
+                    (material_id, user_id),
+                )
+            else:
+                cur.execute("SELECT * FROM materials WHERE id=%s", (material_id,))
             return cur.fetchone()
     finally:
         conn.close()
@@ -144,9 +157,9 @@ def save_result(material_id, result_type, status, content=None,
         conn.close()
 
 
-def get_material_with_results(material_id):
+def get_material_with_results(material_id, user_id=None):
     """Fetch a material and all its results. Always returns all three result type keys."""
-    material = get_material(material_id)
+    material = get_material(material_id, user_id)
     if not material:
         return None
 

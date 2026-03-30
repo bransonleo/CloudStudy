@@ -1,6 +1,7 @@
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 from app import pipeline
+from app.middleware.auth import require_auth
 
 upload_bp = Blueprint("upload", __name__)
 
@@ -11,6 +12,7 @@ def _allowed_file(filename):
 
 
 @upload_bp.route("/upload", methods=["POST"])
+@require_auth
 def upload_file():
     """Upload a file to S3 and start background OCR."""
     if "file" not in request.files:
@@ -32,7 +34,9 @@ def upload_file():
         )
 
     try:
-        material_id = pipeline.start_upload_job(file, current_app._get_current_object())
+        material_id = pipeline.start_upload_job(
+            file, current_app._get_current_object(), g.user_id
+        )
     except Exception:
         return jsonify({"error": "Upload failed", "status": 500}), 500
 

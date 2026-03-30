@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from app import pipeline
+from app.middleware.auth import require_auth
 
 generate_bp = Blueprint("generate", __name__)
 
@@ -8,6 +9,7 @@ VALID_TYPES = {"summary", "quiz", "flashcards"}
 
 
 @generate_bp.route("/generate/<material_id>", methods=["POST"])
+@require_auth
 def generate(material_id):
     """Generate AI content (summary, quiz, or flashcards) for an uploaded material."""
     body = request.get_json(silent=True) or {}
@@ -22,7 +24,9 @@ def generate(material_id):
     format_hint = body.get("format_hint")
 
     try:
-        result = pipeline.run_generation(material_id, result_type, format_hint)
+        result = pipeline.run_generation(
+            material_id, result_type, format_hint, user_id=g.user_id
+        )
         return jsonify(result), 200
     except pipeline.MaterialNotFound:
         return jsonify({"error": "Material not found", "status": 404}), 404
