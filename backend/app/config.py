@@ -32,6 +32,10 @@ class Config:
     COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID", "")
     COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID", "")
     COGNITO_REGION = os.getenv("COGNITO_REGION", "us-east-1")
+    COGNITO_JWKS_URL = (
+        f"https://cognito-idp.{os.getenv('COGNITO_REGION', 'us-east-1')}.amazonaws.com"
+        f"/{os.getenv('COGNITO_USER_POOL_ID', '')}/.well-known/jwks.json"
+    )
 
     # Allowed upload extensions
     ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "txt"}

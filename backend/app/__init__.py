@@ -15,6 +15,10 @@ def create_app(test_config=None):
     # CORS: allow frontend dev server
     CORS(app)
 
+    # Auth middleware (must be before blueprint registration)
+    from app.middleware.auth import register_auth_middleware
+    register_auth_middleware(app)
+
     # Register blueprints
     from app.routes.health import health_bp
 

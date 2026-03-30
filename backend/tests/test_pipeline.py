@@ -13,13 +13,15 @@ def test_start_upload_job_returns_material_id(mock_upload, mock_create, app):
     mock_file.content_type = "text/plain"
 
     with app.app_context():
-        material_id = pipeline.start_upload_job(mock_file, app)
+        material_id = pipeline.start_upload_job(mock_file, app, "user-123")
 
     assert len(material_id) == 36  # UUID format
     mock_upload.assert_called_once()
     upload_args = mock_upload.call_args[0]
     assert upload_args[1] == f"uploads/{material_id}/notes.txt"
     mock_create.assert_called_once()
+    create_args = mock_create.call_args[0]
+    assert create_args[4] == "user-123"  # user_id is 5th positional arg
 
 
 @patch("app.pipeline.db_service.create_material")
@@ -33,7 +35,7 @@ def test_start_upload_job_starts_daemon_thread(mock_upload, mock_create, app):
         mock_thread = MagicMock()
         mock_thread_cls.return_value = mock_thread
         with app.app_context():
-            pipeline.start_upload_job(mock_file, app)
+            pipeline.start_upload_job(mock_file, app, "user-123")
 
     mock_thread_cls.assert_called_once()
     assert mock_thread_cls.call_args[1]["daemon"] is True
@@ -75,8 +77,9 @@ def test_run_generation_success(mock_get, mock_ai, mock_save, app):
     mock_save.return_value = "result-uuid"
 
     with app.app_context():
-        result = pipeline.run_generation("mat-1", "summary")
+        result = pipeline.run_generation("mat-1", "summary", user_id="user-123")
 
+    mock_get.assert_called_once_with("mat-1", "user-123")
     assert result["material_id"] == "mat-1"
     assert result["content"]["title"] == "Notes"
 
@@ -86,7 +89,7 @@ def test_run_generation_raises_not_found(mock_get, app):
     mock_get.return_value = None
     with app.app_context():
         with pytest.raises(pipeline.MaterialNotFound):
-            pipeline.run_generation("nonexistent", "summary")
+            pipeline.run_generation("nonexistent", "summary", user_id="user-123")
 
 
 @patch("app.pipeline.db_service.get_material")
@@ -94,7 +97,7 @@ def test_run_generation_raises_not_ready(mock_get, app):
     mock_get.return_value = {"id": "mat-1", "status": "extracting"}
     with app.app_context():
         with pytest.raises(pipeline.MaterialNotReady):
-            pipeline.run_generation("mat-1", "summary")
+            pipeline.run_generation("mat-1", "summary", user_id="user-123")
 
 
 @patch("app.pipeline.db_service.get_material")
@@ -102,7 +105,7 @@ def test_run_generation_raises_material_failed(mock_get, app):
     mock_get.return_value = {"id": "mat-1", "status": "error", "error_message": "Textract timeout"}
     with app.app_context():
         with pytest.raises(pipeline.MaterialFailed):
-            pipeline.run_generation("mat-1", "summary")
+            pipeline.run_generation("mat-1", "summary", user_id="user-123")
 
 
 @patch("app.pipeline.db_service.save_result")
@@ -114,7 +117,7 @@ def test_run_generation_saves_error_on_ai_failure(mock_get, mock_ai, mock_save, 
 
     with app.app_context():
         with pytest.raises(ValueError):
-            pipeline.run_generation("mat-1", "summary")
+            pipeline.run_generation("mat-1", "summary", user_id="user-123")
 
     mock_save.assert_called_once_with(
         "mat-1", "summary", status="error",

@@ -17,7 +17,7 @@ class MaterialFailed(Exception):
     pass
 
 
-def start_upload_job(file, app):
+def start_upload_job(file, app, user_id):
     """Upload file to S3, create DB record, start background OCR thread.
     Returns material_id immediately."""
     material_id = str(uuid.uuid4())
@@ -26,7 +26,7 @@ def start_upload_job(file, app):
     s3_key = f"uploads/{material_id}/{filename}"
 
     s3_service.upload_file(file, s3_key)
-    db_service.create_material(material_id, filename, s3_key, file_type)
+    db_service.create_material(material_id, filename, s3_key, file_type, user_id)
 
     thread = threading.Thread(
         target=_run_ocr,
@@ -50,10 +50,10 @@ def _run_ocr(app, material_id, s3_key, content_type):
             )
 
 
-def run_generation(material_id, result_type, format_hint=None):
+def run_generation(material_id, result_type, format_hint=None, user_id=None):
     """Run Gemini generation synchronously. Returns result dict.
     Raises MaterialNotFound, MaterialNotReady, or MaterialFailed on pipeline errors."""
-    material = db_service.get_material(material_id)
+    material = db_service.get_material(material_id, user_id)
     if not material:
         raise MaterialNotFound(material_id)
     if material["status"] == "extracting":
