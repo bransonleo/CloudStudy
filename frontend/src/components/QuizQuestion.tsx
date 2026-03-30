@@ -6,10 +6,11 @@ interface Props {
   question: string;
   options: string[];
   correctIndex: number;
+  explanation?: string;
   onAnswer: (correct: boolean) => void;
 }
 
-export default function QuizQuestion({ questionNumber, question, options, correctIndex, onAnswer }: Props) {
+export default function QuizQuestion({ questionNumber, question, options, correctIndex, explanation, onAnswer }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
@@ -53,9 +54,12 @@ export default function QuizQuestion({ questionNumber, question, options, correc
         </button>
       )}
       {submitted && (
-        <p className={selected === correctIndex ? styles.correctMsg : styles.wrongMsg}>
-          {selected === correctIndex ? 'Correct!' : `Incorrect. The answer is: ${options[correctIndex]}`}
-        </p>
+        <div>
+          <p className={selected === correctIndex ? styles.correctMsg : styles.wrongMsg}>
+            {selected === correctIndex ? 'Correct!' : `Incorrect. The answer is: ${options[correctIndex]}`}
+          </p>
+          {explanation && <p className={styles.explanation}>{explanation}</p>}
+        </div>
       )}
     </div>
   );

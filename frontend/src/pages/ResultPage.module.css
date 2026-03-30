@@ -30,14 +30,38 @@
   min-height: 200px;
 }
 
-.summaryText {
+.summaryBox {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 1.25rem;
+}
+
+.summaryBox h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+}
+
+.keyPoints {
+  margin: 0 0 1rem 1.25rem;
+  padding: 0;
+}
+
+.keyPoints li {
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.summaryText {
+  margin: 0;
   line-height: 1.7;
   font-size: 0.95rem;
-  white-space: pre-wrap;
+  color: #1e293b;
+}
+
+.errorMsg {
+  color: #dc2626;
 }
 
 .flashcardGrid {

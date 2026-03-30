@@ -1,4 +1,4 @@
-import type { UploadResponse, MaterialResult, GenerationType } from '../types';
+import type { UploadResponse, BackendMaterial, GenerateResponse, GenerationType } from '../types';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem('token');
@@ -31,25 +31,18 @@ export function uploadFile(file: File) {
   const form = new FormData();
   form.append('file', file);
   // Do NOT set Content-Type header — browser sets it with the multipart boundary
+  // Backend returns 202 Accepted — res.ok is still true for 2xx
   return request<UploadResponse>('/api/upload', { method: 'POST', body: form });
 }
 
-export function generateContent(materialId: string, types: GenerationType[]) {
-  return request<MaterialResult>('/api/generate', {
+export function generateContent(materialId: string, type: GenerationType) {
+  return request<GenerateResponse>(`/api/generate/${materialId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ material_id: materialId, types }),
+    body: JSON.stringify({ type }),
   });
 }
 
 export function getResults(materialId: string) {
-  return request<MaterialResult>(`/api/results/${materialId}`);
-}
-
-export function login(email: string, password: string) {
-  return request<{ token: string }>('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
+  return request<BackendMaterial>(`/api/results/${materialId}`);
 }
