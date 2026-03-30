@@ -6,6 +6,25 @@ All responses are `application/json`.
 
 ---
 
+## Authentication
+
+All endpoints except `GET /api/health` require a valid Cognito access token.
+
+**Header:** `Authorization: Bearer <access_token>`
+
+**Response `401 Unauthorized` (missing, invalid, or expired token):**
+```json
+{
+  "error": "Missing or invalid Authorization header",
+  "status": 401
+}
+```
+
+Tokens are obtained via the Cognito Hosted UI OAuth2 flow (handled by the frontend).
+The backend verifies the JWT signature, expiration, issuer, client_id, and token_use claims.
+
+---
+
 ## Health Check
 
 ### `GET /api/health`
@@ -167,17 +186,9 @@ All error responses follow this shape:
 | Status | Meaning |
 |--------|---------|
 | 400 | Bad request (missing file, invalid type) |
+| 401 | Unauthorized (missing or invalid auth token) |
 | 404 | Route not found |
 | 409 | Conflict (material still processing) |
 | 413 | File too large (exceeds 10 MB) |
 | 422 | Unprocessable entity (OCR extraction failed) |
 | 500 | Internal server error |
-
----
-
-## Planned Endpoints (not yet implemented)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/login` | Cognito login (JWT exchange) |
-| POST | `/api/auth/logout` | Invalidate session |
