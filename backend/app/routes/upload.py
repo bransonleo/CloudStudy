@@ -37,7 +37,8 @@ def upload_file():
         material_id = pipeline.start_upload_job(
             file, current_app._get_current_object(), g.user_id
         )
-    except Exception:
+    except Exception as e:
+        current_app.logger.exception("Upload failed: %s", e)
         return jsonify({"error": "Upload failed", "status": 500}), 500
 
     return jsonify({"material_id": material_id, "status": "extracting"}), 202

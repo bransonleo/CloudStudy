@@ -13,7 +13,11 @@ def generate(extracted_text, result_type, format_hint=None):
     client = genai.Client(api_key=current_app.config["GEMINI_API_KEY"])
     prompt = _build_prompt(extracted_text, result_type, format_hint)
     response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    raw = response.text
+    raw = response.text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1]  # remove ```json line
+        raw = raw.rsplit("```", 1)[0]  # remove closing ```
+        raw = raw.strip()
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
