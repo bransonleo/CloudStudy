@@ -64,11 +64,10 @@
   color: #dc2626;
 }
 
-.flashcardGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
-  justify-items: center;
+.flashcardSingle {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
 }
 
 .score {
@@ -76,4 +75,58 @@
   font-weight: 600;
   color: #334155;
   margin-top: 1rem;
+}
+
+/* ---- Generate More ---- */
+.generateMore {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.generateMoreLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.generateMoreChecks {
+  display: flex;
+  gap: 1rem;
+}
+
+.generateMoreCheck {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #334155;
+  cursor: pointer;
+}
+
+.generateMoreBtn {
+  margin-left: auto;
+  padding: 0.4rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.generateMoreBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.generateMoreBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

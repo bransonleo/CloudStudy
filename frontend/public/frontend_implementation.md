@@ -1,6 +1,6 @@
 # Frontend Implementation — CloudStudy
 
-**Date:** 2026-03-29
+**Date:** 2026-04-04 (Updated)
 **Author:** Jovan (Frontend Developer)
 
 ---
@@ -12,12 +12,16 @@ This document covers the frontend React application for CloudStudy, built as a s
 - Complete page routing with authentication guards
 - Cognito OAuth2 login flow (Hosted UI redirect + authorization code exchange)
 - File upload with drag-and-drop and text paste support
-- AI-generated content display (summary, quiz, flashcards, translation)
-- Interactive quiz with scoring and flippable flashcards
-- Upload history tracking via localStorage (until backend history endpoint exists)
+- AI-generated content display (summary, quiz, flashcards)
+- Interactive quiz with scoring and explanation feedback
+- NotebookLM-style single-card flashcard viewer with navigation
+- "Generate more" — add content types to existing uploads without re-uploading
+- Auto-tab selection — automatically shows available content when only one type exists
+- Upload history tracking via localStorage
+- Two-Factor Authentication (TOTP) enrollment via Google Authenticator
 - Mock data fallbacks for development without backend generate/results endpoints
 
-**Out of scope:** Backend API implementation (Branson), Cognito AWS setup (Jia Zen), AWS infrastructure (Week 13).
+**Out of scope:** Backend API implementation (Branson), Cognito AWS setup (Jia Zen), AWS infrastructure.
 
 ---
 
@@ -31,9 +35,10 @@ This document covers the frontend React application for CloudStudy, built as a s
 | HTTP client | Native `fetch` (wrapped in `api/client.ts`) |
 | Styling | CSS Modules (`.module.css`) |
 | Auth | React Context + Cognito OAuth2 (Authorization Code flow) |
+| 2FA / TOTP | `amazon-cognito-identity-js` + `qrcode.react` |
 | State management | React `useState` / `useEffect` (no external library) |
 
-**Runtime dependencies:** `react`, `react-dom`, `react-router-dom` — no axios, no Tailwind, no Redux.
+**Runtime dependencies:** `react`, `react-dom`, `react-router-dom`, `amazon-cognito-identity-js`, `qrcode.react`.
 
 ---
 
@@ -41,7 +46,7 @@ This document covers the frontend React application for CloudStudy, built as a s
 
 ```
 frontend/
-├── index.html
+├── index.html                  # Global polyfill for `global` (required by cognito-identity-js)
 ├── package.json
 ├── vite.config.ts              # Dev proxy: /api → http://localhost:5000
 ├── .env                        # Cognito credentials (gitignored)
@@ -58,25 +63,26 @@ frontend/
 │   │   └── mockData.ts         # Sample quiz/flashcard/summary for dev without backend
 │   │
 │   ├── types/
-│   │   └── index.ts            # UploadResponse, MaterialResult, QuizItem, Flashcard, etc.
+│   │   └── index.ts            # UploadResponse, BackendMaterial, QuizItem, Flashcard, HistoryEntry, etc.
 │   │
 │   ├── context/
 │   │   └── AuthContext.tsx      # Auth provider: mock login + real Cognito token handling
 │   │
 │   ├── components/
-│   │   ├── Navbar.tsx           # Top nav bar with auth-aware links
+│   │   ├── Navbar.tsx           # Top nav bar with auth-aware links + 2FA settings link
 │   │   ├── ProtectedRoute.tsx   # Redirects unauthenticated users to /login
 │   │   ├── FileDropZone.tsx     # Drag-and-drop + click-to-browse file input
-│   │   ├── FlashCard.tsx        # Flippable card with CSS 3D transform
-│   │   └── QuizQuestion.tsx     # Multiple choice with answer checking + feedback
+│   │   ├── FlashCard.tsx        # Single-card viewer with prev/next navigation (NotebookLM-style)
+│   │   └── QuizQuestion.tsx     # Multiple choice with answer checking + explanation feedback
 │   │
 │   └── pages/
 │       ├── LoginPage.tsx        # Cognito redirect OR mock login (auto-detected)
 │       ├── CallbackPage.tsx     # Handles Cognito redirect: code → token exchange
 │       ├── DashboardPage.tsx    # Welcome, health check, action cards, recent uploads
 │       ├── UploadPage.tsx       # File/text upload + generation type selection
-│       ├── ResultPage.tsx       # Tabbed view: Summary | Quiz | Flashcards | Translation
-│       └── HistoryPage.tsx      # Table of past uploads with "View Results" links
+│       ├── ResultPage.tsx       # Tabbed view: Summary | Quiz | Flashcards + "Generate more"
+│       ├── HistoryPage.tsx      # Table of past uploads with "View Results" links
+│       └── TwoFactorPage.tsx    # TOTP 2FA enrollment: QR code scan + verification
 ```
 
 ---
@@ -88,7 +94,7 @@ frontend/
 ```
 /login → Click "Sign in with AWS Cognito"
    → Redirect to Cognito Hosted UI
-   → User authenticates on Cognito
+   → User authenticates on Cognito (+ MFA challenge if 2FA enabled)
    → Cognito redirects to /callback?code=<authorization_code>
    → CallbackPage exchanges code for tokens (POST /oauth2/token)
    → Tokens stored in localStorage:
@@ -102,11 +108,26 @@ frontend/
 
 When `VITE_COGNITO_DOMAIN` and `VITE_COGNITO_CLIENT_ID` are not set, the login page shows a standard email/password form. Any credentials are accepted and a mock token is stored.
 
+### Two-Factor Authentication (TOTP)
+
+```
+/settings/2fa → Click "Enable 2FA"
+   → Cognito SDK generates TOTP secret
+   → QR code displayed (otpauth:// URL via qrcode.react)
+   → User scans with Google Authenticator
+   → User enters 6-digit code to verify
+   → TOTP linked to account, set as preferred MFA method
+   → Next login: Cognito Hosted UI prompts for TOTP code automatically
+```
+
+**Note:** `index.html` includes a `global = window` polyfill because `amazon-cognito-identity-js` expects the Node.js `global` variable, which does not exist in browser ESM environments.
+
 ### Cognito Configuration
 
 ```env
+VITE_COGNITO_USER_POOL_ID=us-east-1_Ss7jHFZSC
+VITE_COGNITO_CLIENT_ID=7oiatn9dtru73j9vrl08896fv4
 VITE_COGNITO_DOMAIN=https://us-east-1ss7jhfzsc.auth.us-east-1.amazoncognito.com
-VITE_COGNITO_CLIENT_ID=6e19pdbg68cjiurm4b78ukgm6a
 VITE_COGNITO_REDIRECT_URI=http://localhost:5173/callback
 ```
 
@@ -137,24 +158,32 @@ VITE_COGNITO_REDIRECT_URI=http://localhost:5173/callback
 ### Upload (`/upload`)
 - Two modes: file upload (drag-and-drop) or text paste (textarea)
 - File validation: allowed types (pdf, png, jpg, jpeg, txt), max 10 MB
-- After input: checkboxes to select generation types (Summary, Quiz, Flashcards, Translation)
-- Calls `POST /api/upload` → then `POST /api/generate` → navigates to `/result/:id`
-- Falls back to mock data if generate endpoint returns 404
+- After input: checkboxes to select generation types (Summary, Quiz, Flashcards)
+- Upload flow: `POST /api/upload` (202) → poll `GET /api/results/:id` until `status: "ready"` → `POST /api/generate/:id` per type → navigate to `/result/:id`
 - Saves to localStorage history on successful upload
 
 ### Result (`/result/:materialId`)
-- Tabbed interface — only shows tabs for generated content types
-- **Summary tab:** formatted text block
-- **Quiz tab:** interactive multiple-choice questions with "Check Answer" button, color-coded feedback (green/red), running score counter
-- **Flashcards tab:** grid of flippable cards with CSS 3D transform animation
-- **Translation tab:** formatted text block
-- Loads from localStorage cache first, then tries `GET /api/results/:id`, then falls back to mock data
+- **Auto-tab selection** — automatically selects the first available tab (no blank screen if only Quiz was generated)
+- **Generate more** — bar at top shows checkboxes for content types not yet generated; generate without re-uploading
+- **Summary tab:** title, key points list, and summary text
+- **Quiz tab:** interactive multiple-choice questions with color-coded feedback (green/red), explanation text, and running score counter
+- **Flashcards tab:** NotebookLM-style single-card viewer — dark gradient card, click to flip (question ↔ answer), prev/next navigation arrows, card counter (e.g. "1 / 45")
+- Falls back to mock data if backend not available
 
 ### History (`/history`)
 - Table with columns: Filename, Generated types, Date, Actions
 - "View Results" link navigates to `/result/:id`
+- Generated types column updates when new types are added via "Generate more"
 - Empty state with link to upload page
-- Data from localStorage until backend history endpoint exists
+- Data from localStorage
+
+### Two-Factor Auth (`/settings/2fa`)
+- 3-step enrollment flow: Enable → Scan QR → Verify code
+- Uses `amazon-cognito-identity-js` to call Cognito `associateSoftwareToken` and `verifySoftwareToken`
+- QR code rendered via `qrcode.react` (SVG)
+- Manual secret code shown as fallback if QR scanning not possible
+- Sets TOTP as preferred MFA method on successful verification
+- Accessible via "2FA" link in navbar (next to logout button)
 
 ---
 
@@ -169,29 +198,28 @@ All API calls go through `api/client.ts`, which:
 
 `vite.config.ts` proxies `/api/*` to `http://localhost:5000`, so the frontend calls `/api/upload` and Vite forwards it to Flask. No CORS issues in development.
 
-### Current endpoint usage
+### Endpoint usage
 
 | Frontend function | Backend endpoint | Status |
 |-------------------|-----------------|--------|
 | `healthCheck()` | `GET /api/health` | Working |
-| `uploadFile(file)` | `POST /api/upload` | Working (returns 200 stub) |
-| `generateContent(id, types)` | `POST /api/generate` | Not yet — uses mock data |
-| `getResults(id)` | `GET /api/results/:id` | Not yet — uses mock data |
+| `uploadFile(file)` | `POST /api/upload` | Working (returns 202) |
+| `generateContent(id, type)` | `POST /api/generate/<material_id>` | Working (one type per call) |
+| `getResults(id)` | `GET /api/results/<material_id>` | Working |
 
 ---
 
-## 7. Known API Mismatches with Backend Spec
+## 7. Recent Changes (April 2026)
 
-Branson's backend pipeline design (2026-03-29-backend.md) defines API contracts that differ from what the frontend currently expects. These need to be aligned during Week 13 integration:
-
-| Area | Frontend (current) | Backend spec (Branson) | Action needed |
-|------|-------------------|----------------------|---------------|
-| Upload response | `200` with `{material_id, filename, message}` | `202` with `{material_id, status: "extracting"}` | Update `UploadResponse` type and upload flow |
-| Generate endpoint | `POST /api/generate` with `{material_id, types: [...]}` (batch) | `POST /api/generate/<material_id>` with `{type: "summary"}` (one at a time) | Refactor to call generate per type sequentially |
-| Generate errors | Generic error handling | `409` (still extracting), `422` (OCR failed) | Add polling/retry for 409, error display for 422 |
-| Results shape | `{material_id, filename, summary?, quiz?, flashcards?}` | `{material_id, filename, status, results: {summary: {status, content}, ...}}` | Update `MaterialResult` type and ResultPage parsing |
-| Translation | Included as generation type | Deferred — not in backend | Remove from generation options or grey out |
-| OCR polling | Not implemented | Frontend should poll `GET /api/results/:id` until `status: "ready"` | Add polling after upload before showing generate options |
+| Change | Description |
+|--------|-------------|
+| Flashcard redesign | Replaced grid of small flip-cards with a single full-width NotebookLM-style card viewer with navigation arrows |
+| Generate more | Result page shows checkboxes for missing content types — generate without re-uploading |
+| Auto-tab selection | Result page auto-selects the first available tab instead of defaulting to Summary |
+| Increased flashcards | Backend prompt updated to generate 30+ flashcards per material |
+| 2FA page | New `/settings/2fa` page for TOTP enrollment with QR code scanning |
+| Global polyfill | `index.html` includes `global = window` polyfill for `amazon-cognito-identity-js` compatibility |
+| History type sync | History entries update their "Generated" column when new types are added via "Generate more" |
 
 ---
 
@@ -218,10 +246,13 @@ python run.py           # http://localhost:5000
 - [ ] Unauthenticated → redirected to `/login`
 - [ ] Login with Cognito → redirected to Cognito Hosted UI → callback → Dashboard
 - [ ] Dashboard shows green health indicator (if backend running)
-- [ ] Upload page: drag-and-drop a PDF → calls `POST /api/upload` → gets `material_id`
-- [ ] Result page: shows summary/quiz/flashcards in tabs (mock data if backend not ready)
-- [ ] Quiz: select answers, check, see green/red feedback and score
-- [ ] Flashcards: click to flip, click again to flip back
-- [ ] History page: shows past uploads, "View Results" links work
+- [ ] Upload page: drag-and-drop a PDF → calls `POST /api/upload` → polls until ready → generates content
+- [ ] Result page: shows summary/quiz/flashcards in tabs
+- [ ] Result page: auto-selects available tab when only one type generated
+- [ ] Result page: "Generate more" bar lets you add missing content types
+- [ ] Quiz: select answers, see green/red feedback, explanation, and score
+- [ ] Flashcards: single-card view, click to flip, arrow keys to navigate
+- [ ] History page: shows past uploads, generated types update after "Generate more"
+- [ ] 2FA page: enable 2FA → scan QR → verify code → success
 - [ ] Logout clears session and redirects to Cognito logout
 - [ ] `npm run build` succeeds with zero errors

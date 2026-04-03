@@ -13,7 +13,7 @@ export function getCognitoLoginUrl(): string {
     response_type: 'code',
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    scope: 'openid email profile',
+    scope: 'openid email profile aws.cognito.signin.user.admin',
   });
   return `${BASE_URL}/oauth2/authorize?${params.toString()}`;
 }
