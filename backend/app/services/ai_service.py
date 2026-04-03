@@ -53,7 +53,8 @@ def _build_prompt(text, result_type, format_hint):
         )
     elif result_type == "flashcards":
         return (
-            "Generate flashcards from the following study material.\n"
+            "Generate as many flashcards as possible from the following study material. "
+            "Cover every key concept, term, and detail.\n"
             "Return only valid JSON, no markdown formatting.\n"
             'Return JSON: {"flashcards": [{"front": "...", "back": "..."}]}'
             + material_section

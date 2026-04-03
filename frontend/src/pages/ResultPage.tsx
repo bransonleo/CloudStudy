@@ -16,6 +16,7 @@ export default function ResultPage() {
   const [score, setScore] = useState(0);
   const [answered, setAnswered] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
 
   useEffect(() => {
     if (!materialId) return;
@@ -57,6 +58,11 @@ export default function ResultPage() {
 
   const availableTabs = tabs.filter((t) => material.results[t.key].status === 'done');
 
+  // Auto-select first available tab if current tab has no content
+  const effectiveTab = availableTabs.some((t) => t.key === activeTab)
+    ? activeTab
+    : availableTabs[0]?.key ?? 'summary';
+
   const summaryContent = material.results.summary.content as SummaryContent | undefined;
   const quizContent = material.results.quiz.content as QuizContent | undefined;
   const flashcardsContent = material.results.flashcards.content as FlashcardsContent | undefined;
@@ -73,7 +79,7 @@ export default function ResultPage() {
             {availableTabs.map((t) => (
               <button
                 key={t.key}
-                className={`${styles.tab} ${activeTab === t.key ? styles.activeTab : ''}`}
+                className={`${styles.tab} ${effectiveTab === t.key ? styles.activeTab : ''}`}
                 onClick={() => setActiveTab(t.key)}
               >
                 {t.label}
@@ -82,7 +88,7 @@ export default function ResultPage() {
           </div>
 
           <div className={styles.content}>
-            {activeTab === 'summary' && summaryContent && (
+            {effectiveTab === 'summary' && summaryContent && (
               <div className={styles.summaryBox}>
                 <h2>{summaryContent.title}</h2>
                 {summaryContent.key_points.length > 0 && (
@@ -96,7 +102,7 @@ export default function ResultPage() {
               </div>
             )}
 
-            {activeTab === 'quiz' && quizContent && (
+            {effectiveTab === 'quiz' && quizContent && (
               <div>
                 {quizContent.questions.map((q, i) => (
                   <QuizQuestion
@@ -123,11 +129,17 @@ export default function ResultPage() {
               </div>
             )}
 
-            {activeTab === 'flashcards' && flashcardsContent && (
-              <div className={styles.flashcardGrid}>
-                {flashcardsContent.flashcards.map((fc, i) => (
-                  <FlashCard key={i} front={fc.front} back={fc.back} />
-                ))}
+            {effectiveTab === 'flashcards' && flashcardsContent && (
+              <div className={styles.flashcardSingle}>
+                <FlashCard
+                  key={flashcardIndex}
+                  front={flashcardsContent.flashcards[flashcardIndex].front}
+                  back={flashcardsContent.flashcards[flashcardIndex].back}
+                  index={flashcardIndex}
+                  total={flashcardsContent.flashcards.length}
+                  onNext={() => setFlashcardIndex((i) => Math.min(i + 1, flashcardsContent.flashcards.length - 1))}
+                  onPrev={() => setFlashcardIndex((i) => Math.max(i - 1, 0))}
+                />
               </div>
             )}
           </div>
