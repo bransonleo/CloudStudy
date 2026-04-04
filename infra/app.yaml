@@ -36,6 +36,11 @@ Parameters:
     Description: Existing Cognito App Client ID
     Default: 7oiatn9dtru73j9vrl08896fv4
 
+  CognitoDomain:
+    Type: String
+    Description: Cognito Hosted UI domain URL (e.g. https://<prefix>.auth.us-east-1.amazoncognito.com)
+    Default: https://us-east-1ss7jhfzsc.auth.us-east-1.amazoncognito.com
+
   GeminiApiKey:
     Type: String
     NoEcho: true
@@ -123,23 +128,18 @@ Resources:
                 set -e
 
                 # 1. System packages
-                dnf install -y python3.11 python3.11-pip nginx git nodejs npm
+                dnf install -y python3.11 python3.11-pip nginx git
 
                 # 2. Install cfn-bootstrap (provides cfn-signal at /usr/local/bin/)
-                pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+                python3.11 -m pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
 
                 # 3. Clone the repo
-                git clone https://github.com/bransonleo/CloudStudy.git /opt/cloudstudy
+                git clone --depth 1 https://github.com/bransonleo/CloudStudy.git /opt/cloudstudy
 
-                # 4. Build frontend
-                cd /opt/cloudstudy/frontend
-                npm install
-                npm run build
+                # 4. Pull pre-built frontend from S3 (built locally/CI, ~5 s vs ~15 min on t2.micro)
+                aws s3 sync s3://${S3BucketName}/frontend/ /usr/share/nginx/html/
 
-                # 5. Serve frontend via nginx
-                cp -r dist/* /usr/share/nginx/html/
-
-                # 6. Configure nginx
+                # 5. Configure nginx
                 rm -f /etc/nginx/conf.d/default.conf
                 cat > /etc/nginx/conf.d/cloudstudy.conf << 'NGINX'
                 server {
@@ -160,11 +160,11 @@ Resources:
                 NGINX
                 systemctl enable nginx && systemctl start nginx
 
-                # 7. Install backend
+                # 6. Install backend
                 cd /opt/cloudstudy/backend
                 python3.11 -m pip install -r requirements.txt
 
-                # 8. Write .env
+                # 7. Write .env
                 FLASK_SECRET=$(python3.11 -c "import secrets; print(secrets.token_hex(32))")
                 cat > .env << ENV
                 FLASK_ENV=production
@@ -183,7 +183,7 @@ Resources:
                 COGNITO_REGION=us-east-1
                 ENV
 
-                # 9. Create gunicorn systemd service
+                # 8. Create gunicorn systemd service
                 cat > /etc/systemd/system/cloudstudy.service << 'SERVICE'
                 [Unit]
                 Description=CloudStudy Gunicorn
@@ -201,7 +201,7 @@ Resources:
                 systemctl daemon-reload
                 systemctl enable cloudstudy && systemctl start cloudstudy
 
-                # 10. Signal success (trap on EXIT handles failure case)
+                # 9. Signal success (trap on EXIT handles failure case)
                 EXIT_CODE=0
               - S3BucketName: !Ref S3BucketName
                 RdsHost: !Ref RdsHost

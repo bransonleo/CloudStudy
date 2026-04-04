@@ -5,20 +5,21 @@ Two CloudFormation stacks that deploy CloudStudy to AWS.
 ## Architecture
 
 ```
-Internet -> ALB (public subnets) -> EC2 instances (private subnets) -> RDS MySQL (private subnets)
-                                    nginx :80 + gunicorn :5000
+Internet -> ALB (public subnets, HTTPS 443) -> EC2 instances (private subnets) -> RDS MySQL (private subnets)
+                                                nginx :80 + gunicorn :5000
 ```
 
 - **Stack 1 (`cloudstudy-network`):** VPC, 2 public + 2 private subnets across 2 AZs, IGW, NAT GW, route tables, security groups
-- **Stack 2 (`cloudstudy-app`):** ALB, Auto Scaling Group (min 1, max 4), Launch Template, CloudWatch scaling alarms
+- **Stack 2 (`cloudstudy-app`):** ALB (HTTP + HTTPS), Auto Scaling Group (min 1, max 4), Launch Template, CloudWatch scaling alarms
 
 RDS MySQL, S3, and Cognito are pre-existing resources. Their endpoints and IDs are passed into the app stack as parameters with defaults already set.
 
-EC2 instances are bootstrapped via UserData: clone repo from `main`, build frontend, configure nginx, install backend, start gunicorn via systemd.
+The frontend is pre-built locally and uploaded to S3. EC2 instances are bootstrapped via UserData: clone repo from `main`, sync pre-built frontend from S3, configure nginx, install backend Python dependencies, start gunicorn via systemd. This keeps bootstrap time under 2 minutes on a t2.micro.
 
 ## Prerequisites
 
 - AWS CLI installed and configured
+- Node.js 20.19+ and npm (for building the frontend locally)
 - Learner Lab credentials exported:
   ```bash
   export AWS_ACCESS_KEY_ID=<from Learner Lab>
@@ -30,45 +31,37 @@ EC2 instances are bootstrapped via UserData: clone repo from `main`, build front
 
 ## Deploy
 
+The deploy script handles everything: both CloudFormation stacks, HTTPS setup, Cognito configuration, frontend build, and S3 sync.
+
 ```bash
-# 1. Deploy network stack (~3 min)
-aws cloudformation deploy \
-  --template-file infra/network.yaml \
-  --stack-name cloudstudy-network \
-  --region us-east-1
-
-# 2. Deploy app stack (~15 min)
-# RdsHost, S3BucketName, CognitoUserPoolId, CognitoClientId all have correct defaults.
-# Only RdsPassword and GeminiApiKey must be supplied.
-aws cloudformation deploy \
-  --template-file infra/app.yaml \
-  --stack-name cloudstudy-app \
-  --parameter-overrides \
-      RdsPassword=<your-db-password> \
-      GeminiApiKey=<your-gemini-key> \
-  --region us-east-1
-
-# 3. Get the app URL and other outputs
-aws cloudformation describe-stacks \
-  --stack-name cloudstudy-app \
-  --query "Stacks[0].Outputs" \
-  --region us-east-1
+# Export Learner Lab credentials first, then:
+bash infra/deploy.sh <rds-password> <gemini-api-key>
 ```
+
+The script performs these steps:
+1. Deploys the network stack (VPC, subnets, security groups)
+2. Deploys the app stack (ALB, ASG, Launch Template, CloudWatch)
+3. Opens port 443 on the ALB security group
+4. Creates a self-signed SSL certificate and adds an HTTPS listener to the ALB
+5. Updates Cognito callback and logout URLs with the HTTPS ALB endpoint
+6. Builds the frontend with the correct redirect URI and uploads to S3
+7. Syncs the frontend to the running EC2 instance
+
+Total time: ~8 minutes. The self-signed certificate will cause a browser security warning; click through it to proceed.
+
+### Manual deploy
+
+If you prefer to run each step individually, the script is well-commented and each step can be run separately. See [deploy.sh](deploy.sh) for details.
 
 ## Teardown
 
-Delete in reverse order. The network stack can only be deleted after the app stack is gone.
-
 ```bash
-# 1. Delete app stack
-aws cloudformation delete-stack --stack-name cloudstudy-app --region us-east-1
-aws cloudformation wait stack-delete-complete --stack-name cloudstudy-app --region us-east-1
-
-# 2. Delete network stack
-aws cloudformation delete-stack --stack-name cloudstudy-network --region us-east-1
+bash infra/teardown.sh
 ```
 
-Note: The S3 bucket (`cloudstudy-uploads`) and RDS instance (`cloudstudy-db`) are not managed by CloudFormation and will not be deleted by the above commands. Delete them manually via the console or CLI if needed.
+This deletes both stacks in the correct order (app first, then network).
+
+Note: The S3 bucket (`cloudstudy-uploads`), RDS instance (`cloudstudy-db`), and Cognito user pool are not managed by CloudFormation and will not be deleted. Remove them manually via the console or CLI if needed.
 
 ## Troubleshooting
 
