@@ -1,0 +1,107 @@
+.container {
+  max-width: 550px;
+  margin: 0 auto;
+}
+
+.container h1 {
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 2rem;
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.description {
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0 0 0.75rem;
+}
+
+.help {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0 0 1.25rem;
+}
+
+.help a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.help a:hover {
+  text-decoration: underline;
+}
+
+.inputRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.keyInput {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.keyInput:focus {
+  border-color: #2563eb;
+}
+
+.saveBtn {
+  padding: 0.6rem 1.25rem;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.removeBtn {
+  padding: 0.6rem 1rem;
+  background: none;
+  color: #dc2626;
+  border: 1px solid #dc2626;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.removeBtn:hover {
+  background: #fef2f2;
+}
+
+.success {
+  color: #16a34a;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.status {
+  color: #475569;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}

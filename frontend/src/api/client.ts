@@ -8,6 +8,12 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Attach user's Gemini API key if available
+  const geminiKey = localStorage.getItem('gemini_api_key');
+  if (geminiKey) {
+    headers['X-Gemini-Api-Key'] = geminiKey;
+  }
+
   // Merge headers — don't set Content-Type for FormData (browser sets boundary)
   if (options?.headers) {
     Object.assign(headers, options.headers);
