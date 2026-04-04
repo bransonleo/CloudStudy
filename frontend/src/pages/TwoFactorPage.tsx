@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CognitoUserPool, CognitoUser, CognitoUserSession, CognitoAccessToken, CognitoIdToken, CognitoRefreshToken } from 'amazon-cognito-identity-js';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,7 @@ const userPool = new CognitoUserPool({
   ClientId: import.meta.env.VITE_COGNITO_CLIENT_ID,
 });
 
-type Step = 'idle' | 'scan' | 'verify' | 'done' | 'error';
+type Step = 'loading' | 'idle' | 'scan' | 'verify' | 'done' | 'error';
 
 function getCognitoUser(): CognitoUser | null {
   const email = localStorage.getItem('userEmail');
@@ -36,10 +36,51 @@ function getCognitoUser(): CognitoUser | null {
 
 export default function TwoFactorPage() {
   const { userEmail } = useAuth();
-  const [step, setStep] = useState<Step>('idle');
+  const [step, setStep] = useState<Step>('loading');
   const [secret, setSecret] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+
+  // Check if 2FA is already enabled on mount
+  useEffect(() => {
+    const user = getCognitoUser();
+    if (!user) {
+      setStep('idle');
+      return;
+    }
+
+    user.getMFAOptions((err, mfaOptions) => {
+      if (err) {
+        // getMFAOptions may not work for TOTP; fall back to getUser
+        user.getUserData((userErr, data) => {
+          if (userErr) {
+            setStep('idle');
+            return;
+          }
+          const mfaSettings = data?.UserMFASettingList ?? [];
+          if (mfaSettings.includes('SOFTWARE_TOKEN_MFA')) {
+            setStep('done');
+          } else {
+            setStep('idle');
+          }
+        });
+        return;
+      }
+      if (mfaOptions && mfaOptions.length > 0) {
+        setStep('done');
+      } else {
+        // Double-check via getUser for TOTP
+        user.getUserData((_err2, data) => {
+          const mfaSettings = data?.UserMFASettingList ?? [];
+          if (mfaSettings.includes('SOFTWARE_TOKEN_MFA')) {
+            setStep('done');
+          } else {
+            setStep('idle');
+          }
+        });
+      }
+    });
+  }, []);
 
   const otpauthUrl = secret
     ? `otpauth://totp/CloudStudy:${userEmail}?secret=${secret}&issuer=CloudStudy`
@@ -97,6 +138,12 @@ export default function TwoFactorPage() {
   return (
     <div className={styles.container}>
       <h1>Two-Factor Authentication</h1>
+
+      {step === 'loading' && (
+        <div className={styles.card}>
+          <p className={styles.description}>Checking 2FA status...</p>
+        </div>
+      )}
 
       {step === 'idle' && (
         <div className={styles.card}>
