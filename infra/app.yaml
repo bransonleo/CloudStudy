@@ -127,3 +127,45 @@ Resources:
     Properties:
       Domain: cloudstudy-team10
       UserPoolId: !Ref CognitoUserPool
+
+  # ============ ALB ============
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${EnvironmentName}-alb"
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !ImportValue CloudStudy-PublicSubnet1Id
+        - !ImportValue CloudStudy-PublicSubnet2Id
+      SecurityGroups:
+        - !ImportValue CloudStudy-ALBSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-alb"
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-tg"
+      Protocol: HTTP
+      Port: 80
+      VpcId: !ImportValue CloudStudy-VPCId
+      TargetType: instance
+      HealthCheckPath: /api/health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-tg"
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
