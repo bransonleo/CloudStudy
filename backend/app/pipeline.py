@@ -50,7 +50,7 @@ def _run_ocr(app, material_id, s3_key, content_type):
             )
 
 
-def run_generation(material_id, result_type, format_hint=None, user_id=None):
+def run_generation(material_id, result_type, format_hint=None, user_id=None, api_key=None):
     """Run Gemini generation synchronously. Returns result dict.
     Raises MaterialNotFound, MaterialNotReady, or MaterialFailed on pipeline errors."""
     material = db_service.get_material(material_id, user_id)
@@ -63,7 +63,7 @@ def run_generation(material_id, result_type, format_hint=None, user_id=None):
 
     try:
         content = ai_service.generate(
-            material["extracted_text"], result_type, format_hint
+            material["extracted_text"], result_type, format_hint, api_key=api_key
         )
     except Exception as e:
         db_service.save_result(
