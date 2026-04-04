@@ -1,6 +1,6 @@
 # Frontend Implementation — CloudStudy
 
-**Date:** 2026-04-04 (Updated)
+**Date:** 2026-04-05 (Updated)
 **Author:** Jovan (Frontend Developer)
 
 ---
@@ -19,6 +19,7 @@ This document covers the frontend React application for CloudStudy, built as a s
 - Auto-tab selection — automatically shows available content when only one type exists
 - Upload history tracking via localStorage
 - Two-Factor Authentication (TOTP) enrollment via Google Authenticator
+- User-provided Gemini API key settings (stored in browser, sent per request)
 - Mock data fallbacks for development without backend generate/results endpoints
 
 **Out of scope:** Backend API implementation (Branson), Cognito AWS setup (Jia Zen), AWS infrastructure.
@@ -69,7 +70,7 @@ frontend/
 │   │   └── AuthContext.tsx      # Auth provider: mock login + real Cognito token handling
 │   │
 │   ├── components/
-│   │   ├── Navbar.tsx           # Top nav bar with auth-aware links + 2FA settings link
+│   │   ├── Navbar.tsx           # Top nav bar with auth-aware links + settings links (API Key, 2FA)
 │   │   ├── ProtectedRoute.tsx   # Redirects unauthenticated users to /login
 │   │   ├── FileDropZone.tsx     # Drag-and-drop + click-to-browse file input
 │   │   ├── FlashCard.tsx        # Single-card viewer with prev/next navigation (NotebookLM-style)
@@ -82,7 +83,8 @@ frontend/
 │       ├── UploadPage.tsx       # File/text upload + generation type selection
 │       ├── ResultPage.tsx       # Tabbed view: Summary | Quiz | Flashcards + "Generate more"
 │       ├── HistoryPage.tsx      # Table of past uploads with "View Results" links
-│       └── TwoFactorPage.tsx    # TOTP 2FA enrollment: QR code scan + verification
+│       ├── TwoFactorPage.tsx    # TOTP 2FA enrollment: QR code scan + verification
+│       └── ApiKeyPage.tsx       # Gemini API key input — stored in localStorage, sent via header
 ```
 
 ---
@@ -177,6 +179,15 @@ VITE_COGNITO_REDIRECT_URI=http://localhost:5173/callback
 - Empty state with link to upload page
 - Data from localStorage
 
+### API Key Settings (`/settings/api-key`)
+- Input field for user's Google Gemini API key
+- Key stored in localStorage (never sent to backend for storage)
+- Sent as `X-Gemini-Api-Key` header with every API request
+- Backend uses user-provided key for AI generation; falls back to server `.env` key if not provided
+- Save/Update/Remove actions with visual feedback
+- Link to Google AI Studio for users who don't have a key yet
+- Accessible via "API Key" link in navbar
+
 ### Two-Factor Auth (`/settings/2fa`)
 - 3-step enrollment flow: Enable → Scan QR → Verify code
 - Uses `amazon-cognito-identity-js` to call Cognito `associateSoftwareToken` and `verifySoftwareToken`
@@ -192,6 +203,7 @@ VITE_COGNITO_REDIRECT_URI=http://localhost:5173/callback
 All API calls go through `api/client.ts`, which:
 - Reads `localStorage.getItem('token')` (the Cognito access_token)
 - Attaches `Authorization: Bearer <token>` header to every request
+- Attaches `X-Gemini-Api-Key` header if the user has set a Gemini API key
 - Throws the parsed error body on non-2xx responses
 
 ### Vite Dev Proxy
@@ -220,6 +232,10 @@ All API calls go through `api/client.ts`, which:
 | 2FA page | New `/settings/2fa` page for TOTP enrollment with QR code scanning |
 | Global polyfill | `index.html` includes `global = window` polyfill for `amazon-cognito-identity-js` compatibility |
 | History type sync | History entries update their "Generated" column when new types are added via "Generate more" |
+| API key settings | New `/settings/api-key` page for users to provide their own Gemini API key |
+| User API key header | `api/client.ts` sends `X-Gemini-Api-Key` header; backend reads it with fallback to `.env` |
+| 2FA status check | 2FA page now checks MFA status on load — shows "2FA Enabled" if already set up |
+| OAuth scope update | Login URL includes `aws.cognito.signin.user.admin` scope for TOTP SDK access |
 
 ---
 
@@ -253,6 +269,10 @@ python run.py           # http://localhost:5000
 - [ ] Quiz: select answers, see green/red feedback, explanation, and score
 - [ ] Flashcards: single-card view, click to flip, arrow keys to navigate
 - [ ] History page: shows past uploads, generated types update after "Generate more"
+- [ ] API Key page: enter key → saved → shown as "API key is set and ready to use"
+- [ ] API Key page: remove key → cleared from localStorage
+- [ ] Generate content works with user-provided Gemini API key
+- [ ] 2FA page: shows "2FA Enabled" if already enrolled
 - [ ] 2FA page: enable 2FA → scan QR → verify code → success
 - [ ] Logout clears session and redirects to Cognito logout
 - [ ] `npm run build` succeeds with zero errors

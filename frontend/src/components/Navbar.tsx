@@ -27,6 +27,7 @@ export default function Navbar() {
         {isAuthenticated ? (
           <>
             <span className={styles.email}>{userEmail}</span>
+            <Link to="/settings/api-key" className={styles.settingsLink}>API Key</Link>
             <Link to="/settings/2fa" className={styles.settingsLink}>2FA</Link>
             <button onClick={handleLogout} className={styles.logoutBtn}>Logout</button>
           </>
