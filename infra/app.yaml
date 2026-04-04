@@ -361,3 +361,32 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
+
+Outputs:
+  ALBEndpoint:
+    Description: Application URL
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
+
+  RDSEndpoint:
+    Description: RDS MySQL endpoint address
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+
+  CognitoClientId:
+    Description: Cognito App Client ID
+    Value: !Ref CognitoAppClient
+
+  CognitoHostedUIUrl:
+    Description: Cognito Hosted UI login URL
+    Value: !Sub
+      - "https://${Domain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${ClientId}&response_type=code&scope=openid+email+profile&redirect_uri=http://${ALBDns}/api/auth/callback"
+      - Domain: !Ref CognitoUserPoolDomain
+        ClientId: !Ref CognitoAppClient
+        ALBDns: !GetAtt ApplicationLoadBalancer.DNSName
+
+  S3BucketName:
+    Description: S3 bucket for file uploads
+    Value: !Ref CloudStudyBucket
