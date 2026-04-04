@@ -5,7 +5,7 @@
 > AY 2025/2026, Trimester 2  
 > Cloud Computing Project Team 10
 
-CloudStudy is a cloud-based web application that allows students to upload study materials (PDFs, images, or text) and automatically generates summaries, quiz questions, flashcards, and translations using AI.
+CloudStudy is a cloud-based web application that allows students to upload study materials (PDFs, images, or text) and automatically generates summaries, quiz questions, and flashcards using AI.
 
 Built on AWS with an N-tier architecture designed for scalability, reliability, elasticity, and security.
 
@@ -33,10 +33,10 @@ Users (Browser)
 │ └───┬────┘ └───┬────┘│
 └─────┼──────────┼─────┘
       │          │
-  ┌───▼───┐ ┌────▼───┐ ┌──────────┐ ┌───────────┐
-  │  S3   │ │  RDS   │ │ Gemini   │ │ Textract/ │
-  │(files)│ │(MySQL) │ │ API (AI) │ │ Translate │
-  └───────┘ └────────┘ └──────────┘ └───────────┘
+  ┌───▼───┐ ┌────▼───┐ ┌──────────┐ ┌──────────┐
+  │  S3   │ │  RDS   │ │ Gemini   │ │ Textract │
+  │(files)│ │(MySQL) │ │ API (AI) │ │  (OCR)   │
+  └───────┘ └────────┘ └──────────┘ └──────────┘
 ```
 
 ## Tech Stack
@@ -49,9 +49,8 @@ Users (Browser)
 | File Storage | Amazon S3 |
 | AI / LLM | Google Gemini API (gemini-2.5-flash) |
 | OCR | Amazon Textract |
-| Translation | Amazon Translate |
-| Authentication | Amazon Cognito |
-| Infrastructure | VPC, ALB, Auto-Scaling Group, EC2 |
+| Authentication | Amazon Cognito (Hosted UI + TOTP MFA) |
+| Infrastructure | CloudFormation, VPC, ALB, Auto-Scaling Group, EC2 |
 
 ## Features
 
@@ -59,8 +58,7 @@ Users (Browser)
 - AI-generated summaries of study content
 - Auto-generated multiple-choice quiz questions
 - Flashcard generation for revision
-- Multi-language translation of study materials
-- User authentication via Cognito JWT (RS256)
+- User authentication via Cognito (JWT RS256 + TOTP MFA)
 - Horizontally scalable backend with auto-scaling
 
 ## Getting Started
@@ -99,6 +97,28 @@ npm run dev
 
 The frontend runs at `http://localhost:5173`.
 
+### Infrastructure Deployment
+
+See [infra/README.md](infra/README.md) for full deploy and teardown instructions. Summary:
+
+```bash
+# Deploy network stack (~3 min)
+aws cloudformation deploy \
+  --template-file infra/network.yaml \
+  --stack-name cloudstudy-network \
+  --region us-east-1
+
+# Deploy app stack (~15 min)
+# RDS, S3, and Cognito are pre-existing; only the secrets need to be supplied.
+aws cloudformation deploy \
+  --template-file infra/app.yaml \
+  --stack-name cloudstudy-app \
+  --parameter-overrides \
+      RdsPassword=<password> \
+      GeminiApiKey=<key> \
+  --region us-east-1
+```
+
 ## Project Structure
 
 ```
@@ -136,7 +156,16 @@ CloudStudy/
 │   ├── requirements-dev.txt      # Dev/test dependencies
 │   ├── .env.example              # Environment variable template
 │   └── run.py                    # Entry point
-├── frontend/                     # React app (Vite)
+├── frontend/                     # React + TypeScript (Vite)
+│   └── src/
+│       ├── api/                  # API client and Cognito helpers
+│       ├── components/           # Navbar, FileDropZone, FlashCard, QuizQuestion, ProtectedRoute
+│       ├── context/              # AuthContext (Cognito session state)
+│       ├── pages/                # Login, Callback, Dashboard, Upload, Result, History, TwoFactor
+│       └── types/                # Shared TypeScript interfaces
+├── infra/                        # CloudFormation stacks
+│   ├── network.yaml              # VPC, subnets, IGW, NAT GW, route tables, security groups
+│   └── app.yaml                  # ALB, ASG, Launch Template, CloudWatch alarms
 └── docs/                         # Project documentation
 ```
 
