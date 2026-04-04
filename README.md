@@ -18,10 +18,10 @@ Users (Browser)
 ┌─────────────┐
 │ Frontend UI │  React (Vite) / HTML+JS
 └──────┬──────┘
-       │ HTTPS
+       │ HTTPS (443)
        ▼
 ┌──────────────────────┐
-│ Application Load     │  Routes traffic, health checks
+│ Application Load     │  HTTPS termination, routes traffic
 │ Balancer (ALB)       │
 └──────┬───────────────┘
        │
@@ -43,7 +43,7 @@ Users (Browser)
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React (Vite) |
+| Frontend | React (Vite) + TypeScript |
 | Backend | Python 3.11+, Flask, gunicorn |
 | Database | Amazon RDS (MySQL) |
 | File Storage | Amazon S3 |
@@ -66,7 +66,7 @@ Users (Browser)
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+ and npm
+- Node.js 20.19+ and npm
 - AWS CLI v2 (configured with Learner Lab credentials)
 - Google Gemini API key ([get one here](https://aistudio.google.com/))
 
@@ -99,24 +99,17 @@ The frontend runs at `http://localhost:5173`.
 
 ### Infrastructure Deployment
 
-See [infra/README.md](infra/README.md) for full deploy and teardown instructions. Summary:
+See [infra/README.md](infra/README.md) for full details. A single script handles the entire deployment including HTTPS setup and Cognito configuration:
 
 ```bash
-# Deploy network stack (~3 min)
-aws cloudformation deploy \
-  --template-file infra/network.yaml \
-  --stack-name cloudstudy-network \
-  --region us-east-1
+# Export Learner Lab credentials first, then:
+bash infra/deploy.sh <rds-password> <gemini-api-key>
+```
 
-# Deploy app stack (~15 min)
-# RDS, S3, and Cognito are pre-existing; only the secrets need to be supplied.
-aws cloudformation deploy \
-  --template-file infra/app.yaml \
-  --stack-name cloudstudy-app \
-  --parameter-overrides \
-      RdsPassword=<password> \
-      GeminiApiKey=<key> \
-  --region us-east-1
+Teardown:
+
+```bash
+bash infra/teardown.sh
 ```
 
 ## Project Structure
@@ -158,15 +151,19 @@ CloudStudy/
 │   └── run.py                    # Entry point
 ├── frontend/                     # React + TypeScript (Vite)
 │   └── src/
-│       ├── api/                  # API client and Cognito helpers
+│       ├── api/                  # Fetch client, Cognito helpers, mock data
 │       ├── components/           # Navbar, FileDropZone, FlashCard, QuizQuestion, ProtectedRoute
 │       ├── context/              # AuthContext (Cognito session state)
-│       ├── pages/                # Login, Callback, Dashboard, Upload, Result, History, TwoFactor
+│       ├── pages/                # Login, Callback, Dashboard, Upload, Result, History, TwoFactor, ApiKey
 │       └── types/                # Shared TypeScript interfaces
-├── infra/                        # CloudFormation stacks
+├── infra/                        # AWS deployment
 │   ├── network.yaml              # VPC, subnets, IGW, NAT GW, route tables, security groups
-│   └── app.yaml                  # ALB, ASG, Launch Template, CloudWatch alarms
+│   ├── app.yaml                  # ALB, ASG, Launch Template, CloudWatch alarms
+│   ├── deploy.sh                 # One-command deploy (stacks + HTTPS + Cognito + frontend)
+│   └── teardown.sh               # Ordered stack teardown
 └── docs/                         # Project documentation
+    ├── api-contract.md           # Full API endpoint reference
+    └── project-proposal.md       # CSD3156 project proposal (submitted Week 11)
 ```
 
 ## API Endpoints
