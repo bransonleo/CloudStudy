@@ -62,3 +62,68 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${EnvironmentName}-rds"
+
+  # ============ S3 ============
+  CloudStudyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: cloudstudy-uploads
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-uploads"
+
+  # ============ COGNITO ============
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${EnvironmentName}-users"
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+
+  CognitoAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${EnvironmentName}-web"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      CallbackURLs:
+        - !Sub
+          - "http://${ALBDns}/api/auth/callback"
+          - ALBDns: !GetAtt ApplicationLoadBalancer.DNSName
+      LogoutURLs:
+        - !Sub
+          - "http://${ALBDns}"
+          - ALBDns: !GetAtt ApplicationLoadBalancer.DNSName
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: cloudstudy-team10
+      UserPoolId: !Ref CognitoUserPool
