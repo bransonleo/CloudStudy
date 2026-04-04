@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  CloudStudy Application Stack: RDS MySQL, S3, Cognito, ALB, Auto Scaling Group
+  with Launch Template. Imports networking from cloudstudy-network stack.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: CloudStudy
+
+  RdsPassword:
+    Type: String
+    NoEcho: true
+    Description: Master password for RDS MySQL
+    MinLength: 8
+
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: Google Gemini API key
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues: [t2.micro, t2.small, t3.micro]
+
+  KeyPairName:
+    Type: String
+    Default: vockey
+
+Resources:
+  # ============ RDS ============
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets for RDS
+      SubnetIds:
+        - !ImportValue CloudStudy-PrivateSubnet1Id
+        - !ImportValue CloudStudy-PrivateSubnet2Id
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-db-subnet-group"
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "${EnvironmentName}-db"
+      Engine: mysql
+      EngineVersion: "8.0"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      DBName: cloudstudy
+      MasterUsername: admin
+      MasterUserPassword: !Ref RdsPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !ImportValue CloudStudy-RDSSecurityGroupId
+      PubliclyAccessible: false
+      MultiAZ: false
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-rds"
