@@ -22,10 +22,11 @@ def generate(material_id):
         )
 
     format_hint = body.get("format_hint")
+    api_key = request.headers.get("X-Gemini-Api-Key")
 
     try:
         result = pipeline.run_generation(
-            material_id, result_type, format_hint, user_id=g.user_id
+            material_id, result_type, format_hint, user_id=g.user_id, api_key=api_key
         )
         return jsonify(result), 200
     except pipeline.MaterialNotFound:

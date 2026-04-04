@@ -80,7 +80,7 @@ def test_generate_passes_user_id(mock_run, client):
         content_type="application/json",
     )
     assert response.status_code == 200
-    mock_run.assert_called_once_with("mat-1", "summary", None, user_id="test-user")
+    mock_run.assert_called_once_with("mat-1", "summary", None, user_id="test-user", api_key=None)
 
 
 @patch("app.routes.generate.pipeline.run_generation")
