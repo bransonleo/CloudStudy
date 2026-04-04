@@ -10,9 +10,11 @@ Internet -> ALB (public subnets) -> EC2 instances (private subnets) -> RDS MySQL
 ```
 
 - **Stack 1 (`cloudstudy-network`):** VPC, 2 public + 2 private subnets across 2 AZs, IGW, NAT GW, route tables, security groups
-- **Stack 2 (`cloudstudy-app`):** RDS MySQL, S3, Cognito, ALB, Auto Scaling Group (min 1, max 4), CloudWatch scaling alarms
+- **Stack 2 (`cloudstudy-app`):** ALB, Auto Scaling Group (min 1, max 4), Launch Template, CloudWatch scaling alarms
 
-EC2 instances are bootstrapped via UserData: clone repo, build frontend, configure nginx, install backend, start gunicorn via systemd.
+RDS MySQL, S3, and Cognito are pre-existing resources. Their endpoints and IDs are passed into the app stack as parameters with defaults already set.
+
+EC2 instances are bootstrapped via UserData: clone repo from `main`, build frontend, configure nginx, install backend, start gunicorn via systemd.
 
 ## Prerequisites
 
@@ -35,7 +37,9 @@ aws cloudformation deploy \
   --stack-name cloudstudy-network \
   --region us-east-1
 
-# 2. Deploy app stack (~10-15 min)
+# 2. Deploy app stack (~15 min)
+# RdsHost, S3BucketName, CognitoUserPoolId, CognitoClientId all have correct defaults.
+# Only RdsPassword and GeminiApiKey must be supplied.
 aws cloudformation deploy \
   --template-file infra/app.yaml \
   --stack-name cloudstudy-app \
@@ -53,25 +57,23 @@ aws cloudformation describe-stacks \
 
 ## Teardown
 
-Delete in reverse order to avoid dependency errors. Empty the S3 bucket first (CloudFormation cannot delete a non-empty bucket):
+Delete in reverse order. The network stack can only be deleted after the app stack is gone.
 
 ```bash
-# 1. Empty the S3 bucket
-aws s3 rm s3://$(aws cloudformation describe-stacks --stack-name cloudstudy-app \
-  --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
-  --output text --region us-east-1) --recursive --region us-east-1
-
-# 2. Delete app stack
+# 1. Delete app stack
 aws cloudformation delete-stack --stack-name cloudstudy-app --region us-east-1
 aws cloudformation wait stack-delete-complete --stack-name cloudstudy-app --region us-east-1
 
-# 3. Delete network stack
+# 2. Delete network stack
 aws cloudformation delete-stack --stack-name cloudstudy-network --region us-east-1
 ```
+
+Note: The S3 bucket (`cloudstudy-uploads`) and RDS instance (`cloudstudy-db`) are not managed by CloudFormation and will not be deleted by the above commands. Delete them manually via the console or CLI if needed.
 
 ## Troubleshooting
 
 - **Stack creation fails:** Check Events tab in CloudFormation console for the specific error
-- **Instances not healthy:** SSH via SSM Session Manager, check `/var/log/cloud-init-output.log`
-- **502 Bad Gateway:** gunicorn may not have started; check `systemctl status cloudstudy` on the instance
 - **Credentials expired:** Re-export Learner Lab credentials and retry the command
+- **ASG timed out (0 SUCCESS signals):** UserData bootstrap failed on the EC2 instance. SSH via SSM Session Manager and check `/var/log/cloud-init-output.log`
+- **502 Bad Gateway:** gunicorn may not have started; check `systemctl status cloudstudy` on the instance
+- **RDS connection refused:** Confirm the RDS instance is in `available` state: `aws rds describe-db-instances --region us-east-1`

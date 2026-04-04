@@ -1,18 +1,40 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  CloudStudy Application Stack: RDS MySQL, S3, Cognito, ALB, Auto Scaling Group
-  with Launch Template. Imports networking from cloudstudy-network stack.
+  CloudStudy Application Stack: ALB, Auto Scaling Group with Launch Template,
+  CloudWatch scaling alarms. Imports networking from cloudstudy-network stack.
+  RDS, S3, and Cognito are pre-existing resources passed in as parameters.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: CloudStudy
 
+  # --- Pre-existing resources ---
+  RdsHost:
+    Type: String
+    Description: Existing RDS MySQL endpoint address
+    Default: cloudstudy-db.cr2c60uy621h.us-east-1.rds.amazonaws.com
+
   RdsPassword:
     Type: String
     NoEcho: true
-    Description: Master password for RDS MySQL
+    Description: Master password for existing RDS MySQL instance
     MinLength: 8
+
+  S3BucketName:
+    Type: String
+    Description: Existing S3 bucket name for file uploads
+    Default: cloudstudy-uploads
+
+  CognitoUserPoolId:
+    Type: String
+    Description: Existing Cognito User Pool ID
+    Default: us-east-1_Ss7jHFZSC
+
+  CognitoClientId:
+    Type: String
+    Description: Existing Cognito App Client ID
+    Default: 7oiatn9dtru73j9vrl08896fv4
 
   GeminiApiKey:
     Type: String
@@ -29,105 +51,6 @@ Parameters:
     Default: vockey
 
 Resources:
-  # ============ RDS ============
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Private subnets for RDS
-      SubnetIds:
-        - !ImportValue CloudStudy-PrivateSubnet1Id
-        - !ImportValue CloudStudy-PrivateSubnet2Id
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-db-subnet-group"
-
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub "${EnvironmentName}-db"
-      Engine: mysql
-      EngineVersion: "8.0"
-      DBInstanceClass: db.t3.micro
-      AllocatedStorage: 20
-      StorageType: gp2
-      DBName: cloudstudy
-      MasterUsername: admin
-      MasterUserPassword: !Ref RdsPassword
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      VPCSecurityGroups:
-        - !ImportValue CloudStudy-RDSSecurityGroupId
-      PubliclyAccessible: false
-      MultiAZ: false
-      DeletionProtection: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-rds"
-
-  # ============ S3 ============
-  CloudStudyBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: cloudstudy-uploads
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-uploads"
-
-  # ============ COGNITO ============
-  CognitoUserPool:
-    Type: AWS::Cognito::UserPool
-    Properties:
-      UserPoolName: !Sub "${EnvironmentName}-users"
-      UsernameAttributes:
-        - email
-      AutoVerifiedAttributes:
-        - email
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-          RequireLowercase: true
-          RequireNumbers: true
-          RequireSymbols: false
-          RequireUppercase: true
-
-  CognitoAppClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-      ClientName: !Sub "${EnvironmentName}-web"
-      UserPoolId: !Ref CognitoUserPool
-      GenerateSecret: false
-      ExplicitAuthFlows:
-        - ALLOW_USER_PASSWORD_AUTH
-        - ALLOW_REFRESH_TOKEN_AUTH
-        - ALLOW_USER_SRP_AUTH
-      SupportedIdentityProviders:
-        - COGNITO
-      AllowedOAuthFlows:
-        - code
-      AllowedOAuthScopes:
-        - openid
-        - email
-        - profile
-      AllowedOAuthFlowsUserPoolClient: true
-      CallbackURLs:
-        - !Sub
-          - "http://${ALBDns}/api/auth/callback"
-          - ALBDns: !GetAtt ApplicationLoadBalancer.DNSName
-      LogoutURLs:
-        - !Sub
-          - "http://${ALBDns}"
-          - ALBDns: !GetAtt ApplicationLoadBalancer.DNSName
-
-  CognitoUserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties:
-      Domain: cloudstudy-team10
-      UserPoolId: !Ref CognitoUserPool
-
   # ============ ALB ============
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -176,7 +99,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub "${EnvironmentName}-lt"
       LaunchTemplateData:
-        ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
         InstanceType: !Ref InstanceType
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
@@ -187,23 +110,36 @@ Resources:
           Fn::Base64:
             !Sub
               - |
-                #!/bin/bash -xe
+                #!/bin/bash -x
+
+                # Signal CloudFormation on exit (success or failure).
+                # aws-cfn-bootstrap is not in AL2023 dnf repos; installed via pip below.
+                EXIT_CODE=1
+                trap '/usr/local/bin/cfn-signal -e $EXIT_CODE \
+                  --stack ${AWS::StackName} \
+                  --resource AutoScalingGroup \
+                  --region ${AWS::Region} 2>/dev/null || true' EXIT
+
+                set -e
 
                 # 1. System packages
                 dnf install -y python3.11 python3.11-pip nginx git nodejs npm
 
-                # 2. Clone the repo
+                # 2. Install cfn-bootstrap (provides cfn-signal at /usr/local/bin/)
+                pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+
+                # 3. Clone the repo
                 git clone https://github.com/bransonleo/CloudStudy.git /opt/cloudstudy
 
-                # 3. Build frontend
+                # 4. Build frontend
                 cd /opt/cloudstudy/frontend
                 npm install
                 npm run build
 
-                # 4. Serve frontend via nginx
+                # 5. Serve frontend via nginx
                 cp -r dist/* /usr/share/nginx/html/
 
-                # 5. Configure nginx
+                # 6. Configure nginx
                 rm -f /etc/nginx/conf.d/default.conf
                 cat > /etc/nginx/conf.d/cloudstudy.conf << 'NGINX'
                 server {
@@ -224,11 +160,11 @@ Resources:
                 NGINX
                 systemctl enable nginx && systemctl start nginx
 
-                # 6. Install backend
+                # 7. Install backend
                 cd /opt/cloudstudy/backend
                 python3.11 -m pip install -r requirements.txt
 
-                # 7. Write .env
+                # 8. Write .env
                 FLASK_SECRET=$(python3.11 -c "import secrets; print(secrets.token_hex(32))")
                 cat > .env << ENV
                 FLASK_ENV=production
@@ -236,7 +172,7 @@ Resources:
                 FLASK_SECRET_KEY=$FLASK_SECRET
                 AWS_REGION=us-east-1
                 S3_BUCKET_NAME=${S3BucketName}
-                RDS_HOST=${RDSEndpoint}
+                RDS_HOST=${RdsHost}
                 RDS_PORT=3306
                 RDS_DATABASE=cloudstudy
                 RDS_USERNAME=admin
@@ -247,7 +183,7 @@ Resources:
                 COGNITO_REGION=us-east-1
                 ENV
 
-                # 8. Create gunicorn systemd service
+                # 9. Create gunicorn systemd service
                 cat > /etc/systemd/system/cloudstudy.service << 'SERVICE'
                 [Unit]
                 Description=CloudStudy Gunicorn
@@ -265,14 +201,14 @@ Resources:
                 systemctl daemon-reload
                 systemctl enable cloudstudy && systemctl start cloudstudy
 
-                # 9. Signal CloudFormation
-                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
-              - S3BucketName: !Ref CloudStudyBucket
-                RDSEndpoint: !GetAtt RDSInstance.Endpoint.Address
+                # 10. Signal success (trap on EXIT handles failure case)
+                EXIT_CODE=0
+              - S3BucketName: !Ref S3BucketName
+                RdsHost: !Ref RdsHost
                 RdsPassword: !Ref RdsPassword
                 GeminiApiKey: !Ref GeminiApiKey
-                CognitoUserPoolId: !Ref CognitoUserPool
-                CognitoClientId: !Ref CognitoAppClient
+                CognitoUserPoolId: !Ref CognitoUserPoolId
+                CognitoClientId: !Ref CognitoClientId
 
   # ============ AUTO SCALING GROUP ============
   AutoScalingGroup:
@@ -280,12 +216,12 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Count: 1
-        Timeout: PT10M
+        Timeout: PT15M
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MaxBatchSize: 1
         MinInstancesInService: 1
-        PauseTime: PT10M
+        PauseTime: PT15M
         WaitOnResourceSignals: true
     Properties:
       AutoScalingGroupName: !Sub "${EnvironmentName}-asg"
@@ -368,25 +304,17 @@ Outputs:
     Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
 
   RDSEndpoint:
-    Description: RDS MySQL endpoint address
-    Value: !GetAtt RDSInstance.Endpoint.Address
+    Description: RDS MySQL endpoint (pre-existing)
+    Value: !Ref RdsHost
 
   CognitoUserPoolId:
-    Description: Cognito User Pool ID
-    Value: !Ref CognitoUserPool
+    Description: Cognito User Pool ID (pre-existing)
+    Value: !Ref CognitoUserPoolId
 
   CognitoClientId:
-    Description: Cognito App Client ID
-    Value: !Ref CognitoAppClient
-
-  CognitoHostedUIUrl:
-    Description: Cognito Hosted UI login URL
-    Value: !Sub
-      - "https://${Domain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${ClientId}&response_type=code&scope=openid+email+profile&redirect_uri=http://${ALBDns}/api/auth/callback"
-      - Domain: !Ref CognitoUserPoolDomain
-        ClientId: !Ref CognitoAppClient
-        ALBDns: !GetAtt ApplicationLoadBalancer.DNSName
+    Description: Cognito App Client ID (pre-existing)
+    Value: !Ref CognitoClientId
 
   S3BucketName:
-    Description: S3 bucket for file uploads
-    Value: !Ref CloudStudyBucket
+    Description: S3 bucket for file uploads (pre-existing)
+    Value: !Ref S3BucketName
