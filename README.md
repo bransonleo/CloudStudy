@@ -47,13 +47,11 @@ graph TD
     EC2A --> RDS
     EC2A --> Gemini
     EC2A --> Textract
-    EC2B --> S3
-    EC2B --> RDS
-    EC2B --> Gemini
-    EC2B --> Textract
     Cognito -.->|JWT Verification| EC2A
     Cognito -.->|JWT Verification| EC2B
 ```
+
+> Connections from EC2 to S3, RDS, Gemini, and Textract apply equally to all instances in the ASG; one instance is shown for clarity.
 
 <details>
 <summary>ASCII fallback (for viewers without Mermaid support)</summary>
