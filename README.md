@@ -5,7 +5,7 @@
 > AY 2025/2026, Trimester 2  
 > Cloud Computing Project Team 10
 
-CloudStudy is a cloud-based web application that allows students to upload study materials (PDFs, images, or text) and automatically generates summaries, quiz questions, and flashcards using AI.
+CloudStudy is a cloud-based web application that allows students to upload study materials (PDFs, Word documents, Markdown, text, or images) and automatically generates summaries, quiz questions, and flashcards using AI.
 
 Built on AWS with an N-tier architecture designed for scalability, reliability, elasticity, and security.
 
@@ -16,7 +16,7 @@ Users (Browser)
       │
       ▼
 ┌─────────────┐
-│ Frontend UI │  React (Vite) / HTML+JS
+│ Frontend UI │  React (Vite)
 └──────┬──────┘
        │ HTTPS (443)
        ▼
@@ -54,7 +54,7 @@ Users (Browser)
 
 ## Features
 
-- Upload study materials (PDF, images, plain text)
+- Upload study materials (PDF, Word documents, Markdown, plain text, images)
 - AI-generated summaries of study content
 - Auto-generated multiple-choice quiz questions
 - Flashcard generation for revision
@@ -133,9 +133,9 @@ CloudStudy/
 │   │       ├── auth_service.py   # Cognito JWKS fetching and JWT verification
 │   │       ├── db_service.py     # RDS MySQL CRUD
 │   │       ├── s3_service.py     # S3 file upload and retrieval
-│   │       ├── ocr_service.py    # Text extraction (Textract + pdfplumber)
+│   │       ├── ocr_service.py    # Text extraction (Textract, pdfplumber, python-docx)
 │   │       └── ai_service.py     # Gemini AI generation
-│   ├── tests/                    # Pytest test suite (70 tests)
+│   ├── tests/                    # Pytest test suite (74 tests)
 │   │   ├── conftest.py           # Shared fixtures
 │   │   ├── test_health.py
 │   │   ├── test_upload.py

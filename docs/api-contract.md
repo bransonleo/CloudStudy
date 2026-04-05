@@ -55,7 +55,7 @@ for use in subsequent generate calls.
 |-------|------|----------|-------------|
 | `file` | file | Yes | The study material to upload |
 
-**Allowed file types:** `pdf`, `png`, `jpg`, `jpeg`, `txt`
+**Allowed file types:** `pdf`, `docx`, `txt`, `md`, `png`, `jpg`, `jpeg`
 **Max file size:** 10 MB
 
 **Response `202 Accepted`:**
@@ -77,7 +77,7 @@ for use in subsequent generate calls.
 **Response `400 Bad Request` (disallowed type):**
 ```json
 {
-  "error": "File type not allowed. Allowed: jpeg, jpg, pdf, png, txt",
+  "error": "File type not allowed. Allowed: pdf, docx, txt, md, png, jpg, jpeg",
   "status": 400
 }
 ```
