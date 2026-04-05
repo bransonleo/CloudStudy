@@ -38,5 +38,5 @@ class Config:
     )
 
     # Allowed upload extensions
-    ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "txt"}
+    ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "txt", "md", "docx"}
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB

@@ -1,14 +1,24 @@
+import io
+
 import boto3
 import pdfplumber
+from docx import Document
 from flask import current_app
 
 
-def extract_text(file_bytes, content_type):
-    """Extract text from a BytesIO buffer. Routes by content_type."""
+def extract_text(file_bytes, content_type, file_ext=""):
+    """Extract text from a BytesIO buffer. Routes by content_type with
+    file_ext as fallback for ambiguous MIME types (e.g. application/octet-stream)."""
     if "pdf" in content_type:
         return _extract_pdf(file_bytes)
     elif content_type in ("image/png", "image/jpeg", "image/jpg"):
         return _extract_image(file_bytes)
+    elif (
+        "wordprocessingml" in content_type
+        or "officedocument" in content_type
+        or file_ext == "docx"
+    ):
+        return _extract_docx(file_bytes)
     else:
         return file_bytes.read().decode("utf-8")
 
@@ -32,3 +42,8 @@ def _extract_image(file_bytes):
         if block["BlockType"] == "LINE"
     ]
     return "\n".join(lines)
+
+
+def _extract_docx(file_bytes):
+    doc = Document(io.BytesIO(file_bytes.read()))
+    return "\n".join(p.text for p in doc.paragraphs if p.text)

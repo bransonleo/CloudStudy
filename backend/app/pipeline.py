@@ -42,7 +42,8 @@ def _run_ocr(app, material_id, s3_key, content_type):
     with app.app_context():
         try:
             file_bytes = s3_service.get_file_bytes(s3_key)
-            text = ocr_service.extract_text(file_bytes, content_type)
+            file_ext = s3_key.rsplit(".", 1)[1].lower() if "." in s3_key else ""
+            text = ocr_service.extract_text(file_bytes, content_type, file_ext)
             db_service.update_material(material_id, status="ready", extracted_text=text)
         except Exception as e:
             db_service.update_material(
