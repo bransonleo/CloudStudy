@@ -213,6 +213,60 @@ def test_extract_text_txt_decodes_utf8(app):
     assert text == "Hello, notes!"
 
 
+def test_extract_text_markdown_decodes_utf8(app):
+    buf = io.BytesIO("# Heading\n\nSome **bold** text.".encode("utf-8"))
+    with app.app_context():
+        text = ocr_service.extract_text(buf, "text/markdown")
+    assert "Heading" in text
+    assert "bold" in text
+
+
+def test_extract_text_markdown_via_octet_stream_fallback(app):
+    """octet-stream with file_ext=md should still decode as UTF-8."""
+    buf = io.BytesIO("# Notes".encode("utf-8"))
+    with app.app_context():
+        text = ocr_service.extract_text(buf, "application/octet-stream", "md")
+    assert text == "# Notes"
+
+
+@patch("app.services.ocr_service.Document")
+def test_extract_text_docx_by_content_type(mock_document, app):
+    mock_para1 = MagicMock()
+    mock_para1.text = "First paragraph"
+    mock_para2 = MagicMock()
+    mock_para2.text = ""
+    mock_para3 = MagicMock()
+    mock_para3.text = "Third paragraph"
+    mock_doc = MagicMock()
+    mock_doc.paragraphs = [mock_para1, mock_para2, mock_para3]
+    mock_document.return_value = mock_doc
+
+    buf = io.BytesIO(b"fake-docx-bytes")
+    content_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    with app.app_context():
+        text = ocr_service.extract_text(buf, content_type)
+
+    assert text == "First paragraph\nThird paragraph"
+
+
+@patch("app.services.ocr_service.Document")
+def test_extract_text_docx_by_file_ext_fallback(mock_document, app):
+    """octet-stream with file_ext=docx should route to docx extraction."""
+    mock_para = MagicMock()
+    mock_para.text = "Paragraph text"
+    mock_doc = MagicMock()
+    mock_doc.paragraphs = [mock_para]
+    mock_document.return_value = mock_doc
+
+    buf = io.BytesIO(b"fake-docx-bytes")
+    with app.app_context():
+        text = ocr_service.extract_text(buf, "application/octet-stream", "docx")
+
+    assert text == "Paragraph text"
+
+
 @patch("app.services.ocr_service.pdfplumber")
 def test_extract_text_pdf_joins_pages(mock_pdfplumber, app):
     mock_page1 = MagicMock()

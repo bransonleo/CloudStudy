@@ -5,6 +5,9 @@ from app.middleware.auth import require_auth
 
 upload_bp = Blueprint("upload", __name__)
 
+# Display order for user-facing error messages
+_EXT_DISPLAY_ORDER = ["pdf", "docx", "txt", "md", "png", "jpg", "jpeg"]
+
 
 def _allowed_file(filename):
     allowed = current_app.config.get("ALLOWED_EXTENSIONS", set())
@@ -25,9 +28,10 @@ def upload_file():
 
     if not _allowed_file(file.filename):
         allowed = current_app.config.get("ALLOWED_EXTENSIONS", set())
+        ordered = [e for e in _EXT_DISPLAY_ORDER if e in allowed]
         return (
             jsonify({
-                "error": f"File type not allowed. Allowed: {', '.join(sorted(allowed))}",
+                "error": f"File type not allowed. Allowed: {', '.join(ordered)}",
                 "status": 400,
             }),
             400,

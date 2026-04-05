@@ -1,8 +1,11 @@
 import { useState, useRef, type DragEvent } from 'react';
 import styles from './FileDropZone.module.css';
 
-const ALLOWED = ['pdf', 'png', 'jpg', 'jpeg', 'txt'];
-const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+const ALLOWED = [
+  'pdf', 'docx', 'txt', 'md',       // documents
+  'png', 'jpg', 'jpeg'              // images
+];
+const MAX_SIZE = 10 * 1024 * 1024;  // 10 MB
 
 interface Props {
   onFileSelected: (file: File) => void;
@@ -60,14 +63,14 @@ export default function FileDropZone({ onFileSelected }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept=".pdf,.png,.jpg,.jpeg,.txt"
+        accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
         onChange={onInputChange}
         hidden
       />
       <p className={styles.label}>
         {selectedName || 'Drag & drop a file here, or click to browse'}
       </p>
-      <p className={styles.hint}>Allowed: PDF, PNG, JPG, TXT (max 10 MB)</p>
+      <p className={styles.hint}>Allowed: PDF, DOCX, TXT, MD, PNG, JPG (max 10 MB)</p>
       {error && <p className={styles.error}>{error}</p>}
     </div>
   );

@@ -53,6 +53,121 @@ Total time: ~8 minutes. The self-signed certificate will cause a browser securit
 
 If you prefer to run each step individually, the script is well-commented and each step can be run separately. See [deploy.sh](deploy.sh) for details.
 
+## Post-Deploy Verification
+
+Run these checks in order after `deploy.sh` completes. Each step depends on the one before it.
+
+### 1. RDS is available
+
+```bash
+aws rds describe-db-instances \
+  --db-instance-identifier cloudstudy-db \
+  --region us-east-1 \
+  --query "DBInstances[0].DBInstanceStatus" \
+  --output text
+```
+
+Expected: `available`. If `stopping` or `stopped`, start it from the RDS console before proceeding.
+
+### 2. ASG instances are InService
+
+```bash
+aws autoscaling describe-auto-scaling-groups \
+  --auto-scaling-group-names CloudStudy-asg \
+  --region us-east-1 \
+  --query "AutoScalingGroups[0].Instances[*].[InstanceId,LifecycleState]" \
+  --output table
+```
+
+Expected: 2 instances with `LifecycleState: InService`. If fewer, the UserData bootstrap likely failed. Check `/var/log/cloud-init-output.log` via SSM Session Manager.
+
+### 3. ALB target group has healthy targets
+
+```bash
+TG_ARN=$(aws elbv2 describe-target-groups \
+  --region us-east-1 \
+  --query "TargetGroups[?contains(TargetGroupName,'CloudStudy')].TargetGroupArn | [0]" \
+  --output text)
+
+aws elbv2 describe-target-health \
+  --target-group-arn "$TG_ARN" \
+  --region us-east-1 \
+  --query "TargetHealthDescriptions[*].[Target.Id,TargetHealth.State]" \
+  --output table
+```
+
+Expected: at least 1 target in `healthy` state. The ALB requires 2 consecutive `/api/health` successes (30s interval) before marking a target healthy. Wait up to 1 minute after ASG shows InService if targets are still `initial`.
+
+### 4. API health endpoint responds
+
+```bash
+ALB_DNS=$(aws cloudformation describe-stacks \
+  --stack-name cloudstudy-app \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='ALBEndpoint'].OutputValue" \
+  --output text | sed 's|^http://||')
+
+curl -sk "https://$ALB_DNS/api/health"
+```
+
+Expected: `{"status":"ok"}`. This confirms nginx is running, gunicorn is serving, and RDS was reachable at startup. The app calls `create_tables()` on boot, so a DB failure would crash gunicorn before it could respond.
+
+### 5. Frontend is served
+
+```bash
+curl -sk "https://$ALB_DNS/" | head -3
+```
+
+Expected: HTML beginning with `<!doctype html>`. This confirms the S3-to-EC2 nginx sync completed and nginx is serving the React SPA. A non-HTML response (e.g. JSON 404) means the sync did not run. Re-run it manually:
+
+```bash
+INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters "Name=instance-state-name,Values=running" "Name=tag:Name,Values=CloudStudy-ec2" \
+  --region us-east-1 \
+  --query "Reservations[].Instances[0].InstanceId" --output text | head -1)
+
+aws ssm send-command \
+  --instance-ids "$INSTANCE_ID" \
+  --document-name "AWS-RunShellScript" \
+  --parameters 'commands=["aws s3 sync s3://cloudstudy-uploads/frontend/ /usr/share/nginx/html/ --delete --exact-timestamps"]' \
+  --region us-east-1
+```
+
+### 6. Cognito callback URLs include the ALB
+
+```bash
+aws cognito-idp describe-user-pool-client \
+  --user-pool-id us-east-1_Ss7jHFZSC \
+  --client-id 7oiatn9dtru73j9vrl08896fv4 \
+  --region us-east-1 \
+  --query "UserPoolClient.CallbackURLs" \
+  --output json
+```
+
+Expected: the list includes `https://<ALB_DNS>/callback`. If missing, the Cognito step in deploy.sh did not complete. Re-run step 5 of the script manually or re-run the full deploy.
+
+### 7. S3 frontend assets are present
+
+```bash
+aws s3 ls s3://cloudstudy-uploads/frontend/ --region us-east-1 | head -10
+```
+
+Expected: `index.html` and hashed JS/CSS asset files. If empty, the frontend build did not upload. Run `cd frontend && npm run build` then `aws s3 sync dist/ s3://cloudstudy-uploads/frontend/ --delete --region us-east-1`. New ASG instances pull from S3 on boot, so this must be populated before scaling events.
+
+### 8. CloudWatch alarms are not in ALARM state
+
+```bash
+aws cloudwatch describe-alarms \
+  --alarm-names CloudStudy-high-cpu CloudStudy-low-cpu \
+  --region us-east-1 \
+  --query "MetricAlarms[*].[AlarmName,StateValue]" \
+  --output table
+```
+
+Expected: `OK` or `INSUFFICIENT_DATA` (normal immediately after deploy, as there are not enough data points yet). `ALARM` right after deploy indicates a misconfiguration in the scaling policy or ASG dimensions.
+
+---
+
 ## Teardown
 
 ```bash
