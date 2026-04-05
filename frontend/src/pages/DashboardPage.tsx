@@ -8,18 +8,17 @@ import styles from './DashboardPage.module.css';
 export default function DashboardPage() {
   const { userEmail } = useAuth();
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
-  const [recent, setRecent] = useState<HistoryEntry[]>([]);
+  const [recent] = useState<HistoryEntry[]>(() => {
+    const saved = localStorage.getItem('uploadHistory');
+    if (!saved) return [];
+    const all: HistoryEntry[] = JSON.parse(saved);
+    return all.slice(-5).reverse();
+  });
 
   useEffect(() => {
     healthCheck()
       .then(() => setBackendOk(true))
       .catch(() => setBackendOk(false));
-
-    const saved = localStorage.getItem('uploadHistory');
-    if (saved) {
-      const all: HistoryEntry[] = JSON.parse(saved);
-      setRecent(all.slice(-5).reverse());
-    }
   }, []);
 
   return (

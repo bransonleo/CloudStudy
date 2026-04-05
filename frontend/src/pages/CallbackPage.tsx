@@ -8,25 +8,20 @@ export default function CallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { setTokens } = useAuth();
-  const [error, setError] = useState('');
   const attempted = useRef(false); // prevents React StrictMode double-invocation
+  const code = searchParams.get('code');
+  const errorParam = searchParams.get('error');
+  const [error, setError] = useState(
+    errorParam
+      ? `Cognito error: ${errorParam}`
+      : !code
+        ? 'No authorization code received from Cognito.'
+        : ''
+  );
 
   useEffect(() => {
-    if (attempted.current) return;
+    if (attempted.current || error || !code) return;
     attempted.current = true;
-
-    const code = searchParams.get('code');
-    const errorParam = searchParams.get('error');
-
-    if (errorParam) {
-      setError(`Cognito error: ${errorParam}`);
-      return;
-    }
-
-    if (!code) {
-      setError('No authorization code received from Cognito.');
-      return;
-    }
 
     exchangeCodeForTokens(code)
       .then((tokens) => {
@@ -36,7 +31,7 @@ export default function CallbackPage() {
       .catch((err) => {
         setError(err.message || 'Failed to exchange code for tokens.');
       });
-  }, [searchParams, setTokens, navigate]);
+  }, [code, error, setTokens, navigate]);
 
   if (error) {
     return (

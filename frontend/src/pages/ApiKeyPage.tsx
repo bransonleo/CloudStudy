@@ -1,18 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import styles from './ApiKeyPage.module.css';
 
 export default function ApiKeyPage() {
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') ?? '');
   const [saved, setSaved] = useState(false);
-  const [hasKey, setHasKey] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('gemini_api_key');
-    if (stored) {
-      setApiKey(stored);
-      setHasKey(true);
-    }
-  }, []);
+  const [hasKey, setHasKey] = useState(() => !!localStorage.getItem('gemini_api_key'));
 
   function handleSave() {
     if (!apiKey.trim()) return;

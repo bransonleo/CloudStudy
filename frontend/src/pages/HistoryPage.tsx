@@ -1,18 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { HistoryEntry } from '../types';
 import styles from './HistoryPage.module.css';
 
 export default function HistoryPage() {
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
-
-  useEffect(() => {
+  const [entries] = useState<HistoryEntry[]>(() => {
     const saved = localStorage.getItem('uploadHistory');
-    if (saved) {
-      const all: HistoryEntry[] = JSON.parse(saved);
-      setEntries(all.slice().reverse());
-    }
-  }, []);
+    if (!saved) return [];
+    const all: HistoryEntry[] = JSON.parse(saved);
+    return all.slice().reverse();
+  });
 
   return (
     <div>

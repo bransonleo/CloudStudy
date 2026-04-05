@@ -36,7 +36,9 @@ function getCognitoUser(): CognitoUser | null {
 
 export default function TwoFactorPage() {
   const { userEmail } = useAuth();
-  const [step, setStep] = useState<Step>('loading');
+  const [step, setStep] = useState<Step>(() =>
+    localStorage.getItem('userEmail') ? 'loading' : 'idle'
+  );
   const [secret, setSecret] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -44,10 +46,7 @@ export default function TwoFactorPage() {
   // Check if 2FA is already enabled on mount
   useEffect(() => {
     const user = getCognitoUser();
-    if (!user) {
-      setStep('idle');
-      return;
-    }
+    if (!user) return; // step already initialized to 'idle' when no userEmail
 
     user.getMFAOptions((err, mfaOptions) => {
       if (err) {
