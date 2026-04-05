@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getResults, generateContent } from '../api/client';
 import { mockMaterial } from '../api/mockData';
@@ -26,17 +26,17 @@ export default function ResultPage() {
   const [genTypes, setGenTypes] = useState<Set<GenerationType>>(new Set());
   const [generating, setGenerating] = useState(false);
 
-  function fetchResults() {
+  const fetchResults = useCallback(() => {
     if (!materialId) return;
     getResults(materialId)
       .then(setMaterial)
       .catch(() => setMaterial({ ...mockMaterial, material_id: materialId }))
       .finally(() => setLoading(false));
-  }
+  }, [materialId]);
 
   useEffect(() => {
     fetchResults();
-  }, [materialId]);
+  }, [fetchResults]);
 
   if (loading) return <p>Loading results...</p>;
   if (!material) return <p>No results found.</p>;

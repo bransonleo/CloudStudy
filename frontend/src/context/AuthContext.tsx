@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { decodeJwtPayload, isCognitoConfigured, getCognitoLogoutUrl } from '../api/cognito';
 
 interface AuthContextValue {
@@ -14,18 +14,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  // Restore session on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('token');
-    const email = localStorage.getItem('userEmail');
-    if (saved) {
-      setToken(saved);
-      setUserEmail(email);
-    }
-  }, []);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('userEmail'));
 
   const loginMock = (email: string) => {
     const fakeToken = 'mock-jwt-' + Date.now();
@@ -77,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
