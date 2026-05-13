@@ -59,16 +59,16 @@ graph TB
     User -->|HTTP 80| IGW
     IGW --> ALB1
     IGW --> ALB2
-    ALB1 -->|HTTP 80<br/>nginx proxy| EC2A
-    ALB2 --> EC2B
-    EC2A -->|IAM role| S3
-    EC2A -->|MySQL 3306<br/>(private subnet)| RDSA
+    ALB1 -->|HTTP 80, nginx proxy| EC2A
+    ALB2 -->|HTTP 80, nginx proxy| EC2B
+    EC2A -->|NAT, IAM role| S3
+    EC2A -->|MySQL 3306, private subnet| RDSA
     EC2B --> RDSA
     EC2A -->|NAT| Gemini
-    EC2A -->|IAM role| Textract
+    EC2A -->|NAT, IAM role| Textract
     EC2A -.->|JWKS fetch + JWT verify| Cognito
     EC2A -.->|logs, metrics| CW
-    CW -.->|CPU alarm| EC2A
+    CW -.->|CPU alarm → ASG scaling| EC2A
 ```
 
 > Subnet and connection details shown for one AZ apply symmetrically to the other. EC2 access to S3, RDS, Gemini, and Textract applies to all ASG members.
