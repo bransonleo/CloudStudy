@@ -50,7 +50,7 @@ Client Request
   Pipeline Orchestrator     # pipeline.py - multi-step workflow coordination
       |
       v
-  Service Layer             # services/ - one module per external dependency
+  Service Layer             # services/ - one or more external dependencies per module
       |
       v
   AWS / External APIs       # S3, RDS, Textract, Cognito, Gemini
@@ -63,14 +63,14 @@ Client Request
 | **Middleware** | `middleware/auth.py` | JWT extraction, Cognito token verification, user identity injection into Flask `g` |
 | **Routes** | `routes/` (4 Blueprints) | Request parsing, input validation, HTTP status code semantics, error response formatting |
 | **Orchestration** | `pipeline.py` | Coordinates multi-step workflows (upload + background OCR, text retrieval + AI generation) |
-| **Services** | `services/` (5 modules) | Each wraps exactly one external dependency with a clean internal API |
+| **Services** | `services/` (5 modules) | Each wraps one or more external dependencies with a clean internal API (`ocr_service` wraps Textract, pdfplumber, and python-docx) |
 
 ### Application Factory Pattern
 
 The app is constructed via `create_app()` in `app/__init__.py`, which:
 
 1. Loads configuration from environment variables (`config.py`)
-2. Enables CORS for the frontend origin
+2. Enables CORS (all origins allowed; see [Security](#security) for rationale)
 3. Registers the auth middleware (`before_request` hook)
 4. Registers 4 Flask Blueprints under the `/api/` prefix
 5. Creates database tables on startup (skipped in test mode)
@@ -255,8 +255,8 @@ All endpoints are prefixed with `/api/` and follow REST conventions. Every error
 |---|---|---|---|---|
 | `GET` | `/api/health` | No | ALB health check | `200 {"status": "ok"}` |
 | `POST` | `/api/upload` | Yes | Upload file, start OCR | `202 {"material_id": "...", "status": "extracting"}` |
-| `POST` | `/api/generate/<material_id>` | Yes | Generate AI content | `200 {result_id, material_id, type, content}` |
-| `GET` | `/api/results/<material_id>` | Yes | Fetch material + results | `200 {material_id, filename, status, results{...}}` |
+| `POST` | `/api/generate/<material_id>` | Yes | Generate AI content | `200 {result_id, material_id, type, content, format_hint}` |
+| `GET` | `/api/results/<material_id>` | Yes | Fetch material + results | `200 {material_id, filename, status, error_message, results{...}}` |
 
 ### Design Decisions
 
@@ -281,7 +281,7 @@ For full request/response schemas and example payloads, see [`docs/api-contract.
 | **Textract** | OCR for image files (PNG, JPG) | On-demand `detect_document_text` API calls |
 | **Cognito** | User authentication, JWT issuance, TOTP MFA | User pool with hosted UI and OAuth2 flow |
 | **VPC** | Network isolation | Public subnets (ALB), private subnets (EC2, RDS) |
-| **CloudWatch** | Monitoring and alarms | CPU utilization, unhealthy host count |
+| **CloudWatch** | Monitoring and alarms | High/low CPU utilization alarms drive ASG scale-out and scale-in |
 
 ### Data Flow
 
@@ -315,7 +315,7 @@ User --> ALB (HTTPS) --> EC2/Flask --> RDS (fetch extracted text)
 **Current constraints within the Learner Lab:**
 
 - Background OCR threads are daemon threads tied to the worker process that spawned them. If the ASG terminates an instance during OCR, that job is lost and the material remains in `extracting` status. See [Design Tradeoffs](#design-tradeoffs-and-known-limitations) for the rationale behind this approach.
-- Each database call opens a new connection. With the ASG scaled to 4 instances running 4 gunicorn workers each, peak connection demand could approach the db.t3.micro limit of roughly 66 connections.
+- Each database call opens a new connection. With the ASG scaled to 4 instances running 2 gunicorn workers each, peak connection demand could approach the db.t3.micro limit of roughly 66 connections.
 - Gemini's free tier rate limits (10 RPM, 250 RPD) act as a throughput ceiling for AI generation, independent of how many EC2 instances are running.
 
 ### Reliability
@@ -375,6 +375,7 @@ materials (1) ----< (N) results
 | `content` | `JSON` | Generated content (structure varies by result_type) |
 | `format_hint` | `TEXT` | Custom generation instructions from the user |
 | `error_message` | `TEXT` | Failure details |
+| `created_at` / `updated_at` | `DATETIME` | Audit timestamps |
 
 ### Design Rationale
 
@@ -406,7 +407,7 @@ All authenticated endpoints require a valid Cognito access token in the `Authori
 
 Authentication is enforced at **two independent layers**:
 
-1. **Global `before_request` hook** (`register_auth_middleware`): Runs before every request. Skips only CORS preflight (`OPTIONS`) and explicitly public paths (`/api/health`). Sets `g.user_id` and `g.user_email` on success.
+1. **Global `before_request` hook** (`register_auth_middleware`): Runs before every request. Skips only CORS preflight (`OPTIONS`) and explicitly public paths (`/api/health`). Sets `g.user_id` (from `sub` claim) and `g.user_email` (from `username` claim) on success.
 2. **Per-route `@require_auth` decorator**: Acts as a safety net. If the `before_request` hook was somehow bypassed (misconfiguration, future refactoring), this decorator independently verifies the token.
 
 This dual-layer approach ensures that adding a new route without the decorator still requires authentication (via the global hook), while the decorator provides an explicit, visible contract on each protected endpoint.
@@ -455,7 +456,7 @@ This prevents users from accessing other users' materials or results, even if th
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate                # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 pip install -r requirements-dev.txt     # pytest and dev tools
 cp .env.example .env                    # Fill in your values
@@ -485,7 +486,7 @@ All configuration is loaded from environment variables via `python-dotenv`. The 
 ### Running Locally
 
 ```bash
-source venv/bin/activate
+source venv/bin/activate                # Windows: venv\Scripts\activate
 python run.py                           # Starts on http://localhost:5000
 curl http://localhost:5000/api/health   # Verify: {"status": "ok"}
 ```
@@ -497,7 +498,7 @@ source venv/bin/activate
 python -m pytest tests/ -v
 ```
 
-The test suite contains **74 tests across 9 files**, covering:
+The test suite contains **74 tests across 8 test files** (plus `conftest.py` for shared fixtures), covering:
 
 | Test File | Coverage Area |
 |---|---|
@@ -509,7 +510,6 @@ The test suite contains **74 tests across 9 files**, covering:
 | `test_pipeline.py` | Pipeline orchestrator logic |
 | `test_auth.py` | JWT verification and middleware |
 | `test_user_scoping.py` | User data isolation (cross-tenant access prevention) |
-| `conftest.py` | Shared fixtures (Flask test client) |
 
 **Test architecture:** The `TESTING=True` config flag skips Cognito JWT verification (sets a default test user) and skips database table creation, allowing tests to run without AWS credentials or a live database.
 
@@ -518,10 +518,10 @@ The test suite contains **74 tests across 9 files**, covering:
 In production, the backend runs under **gunicorn** behind the ALB:
 
 ```bash
-gunicorn -w 4 -b 0.0.0.0:5000 run:app
+gunicorn --bind 127.0.0.1:5000 --workers 2 --timeout 120 run:app
 ```
 
-EC2 instances are launched via the Auto-Scaling Group with a launch template that installs dependencies and starts gunicorn automatically.
+EC2 instances are launched via the Auto-Scaling Group with a launch template that installs dependencies and starts gunicorn automatically as a systemd service.
 
 ### Logging
 
