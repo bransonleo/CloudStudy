@@ -71,7 +71,7 @@ graph TB
     CW -.->|CPU alarm → ASG scaling| EC2A
 ```
 
-> Subnet and connection details shown for one AZ apply symmetrically to the other. EC2 access to S3, RDS, Gemini, and Textract applies to all ASG members.
+> Subnet and connection details shown for one AZ apply symmetrically to the other. All connections shown from EC2A apply equally to every ASG member.
 
 <details>
 <summary>ASCII fallback (for viewers without Mermaid support)</summary>
